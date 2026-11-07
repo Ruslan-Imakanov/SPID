@@ -1,0 +1,9 @@
+{
+  // Cloudflare Worker, который раздаёт собранное приложение.
+  // Файлы dist/ упаковываются в скрипт командой `npm run build:worker`.
+  "name": "spid",
+  "main": ".worker/worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false
+}

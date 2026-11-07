@@ -33,21 +33,22 @@
 
 ## Устройство
 
-- Фронтенд: React + TypeScript + Vite, PWA (устанавливается на телефон как приложение). Хостинг — Cloudflare Pages.
+- Фронтенд: React + TypeScript + Vite, PWA (устанавливается на телефон как приложение).
+- Хостинг: Cloudflare Workers — https://spid.imakanovr.workers.dev. Собранное приложение упаковывается в один
+  Worker-скрипт ([`scripts/build-worker.mjs`](scripts/build-worker.mjs)), публикация — `npm run deploy`.
 - Бэкенд: Supabase — база Postgres, вход по телефону и паролю, приватное хранилище фото, права доступа (RLS).
 - Схема базы и начальный список машин: [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql).
 - Логика расчёта: [`src/lib/calc.ts`](src/lib/calc.ts), тесты — [`src/lib/calc.test.ts`](src/lib/calc.test.ts).
 
 ## Развёртывание
 
-1. **Supabase**: создать проект (бесплатный тариф), выполнить `supabase/migrations/001_init.sql` в SQL Editor.
+1. **Supabase**: создать проект (бесплатный тариф), выполнить по порядку файлы из `supabase/migrations/` в SQL Editor.
 2. В Supabase: **Authentication → Sign In / Providers → Email** — выключить **Confirm email**
-   (водители входят по номеру телефона, почта не используется).
+   (водители входят по номеру телефона; служебный адрес вида `77011234567@<проект>.supabase.co`, писем на него не отправляется).
 3. Скопировать `.env.example` в `.env` и вписать `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`
    (Project Settings → API).
-4. Собрать: `npm install && npm run build`. Папку `dist` опубликовать на Cloudflare Pages
-   (или подключить репозиторий в Cloudflare Pages: команда сборки `npm run build`, папка `dist`,
-   переменные `VITE_SUPABASE_URL` и `VITE_SUPABASE_ANON_KEY`).
+4. Опубликовать на Cloudflare: `npm install && npm run deploy`
+   (нужны переменные `CLOUDFLARE_API_TOKEN` — токен с шаблоном «Edit Cloudflare Workers» — и `CLOUDFLARE_ACCOUNT_ID`).
 5. **Первым** зарегистрироваться руководителю — первый пользователь автоматически получает права руководителя.
    Остальные регистрируются как водители и ждут подтверждения во вкладке «Водители».
 

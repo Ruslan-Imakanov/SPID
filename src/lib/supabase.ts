@@ -11,11 +11,20 @@ export const supabase = createClient(url || 'http://localhost', key || 'missing'
 
 /**
  * Водители входят по номеру телефона. Supabase требует e-mail, поэтому номер
- * превращается в служебный адрес. Писем на него не отправляется
- * (подтверждение e-mail в Supabase должно быть выключено).
+ * превращается в служебный адрес на домене самого проекта Supabase
+ * (Supabase принимает только существующие домены). Писем на него не отправляется:
+ * подтверждение e-mail в Supabase должно быть выключено.
  */
+const EMAIL_DOMAIN = (() => {
+  try {
+    return new URL(url || 'http://localhost').host;
+  } catch {
+    return 'localhost';
+  }
+})();
+
 export function phoneToEmail(phone: string): string {
-  return `${normalizePhone(phone)}@spid-drivers.app`;
+  return `${normalizePhone(phone)}@${EMAIL_DOMAIN}`;
 }
 
 /** +7 (701) 123-45-67 → 77011234567; 8 701 … → 7701… */
