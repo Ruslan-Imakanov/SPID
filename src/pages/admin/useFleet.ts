@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import type { FleetEvent, Profile, Vehicle } from '../../lib/types';
+import type { FleetEvent, InsurancePolicy, Profile, Vehicle } from '../../lib/types';
 
 export interface Fleet {
   vehicles: Vehicle[];
   profiles: Profile[];
   events: FleetEvent[];
+  policies: InsurancePolicy[];
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -33,6 +34,7 @@ export function useFleet(): Fleet {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [events, setEvents] = useState<FleetEvent[]>([]);
+  const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,16 +42,19 @@ export function useFleet(): Fleet {
     setLoading(true);
     setError(null);
     try {
-      const [v, p, e] = await Promise.all([
+      const [v, p, e, ins] = await Promise.all([
         supabase.from('vehicles').select('*').order('plate'),
         supabase.from('profiles').select('*').order('full_name'),
-        fetchAllEvents()
+        fetchAllEvents(),
+        supabase.from('insurance_policies').select('*').order('ends_on')
       ]);
       if (v.error) throw v.error;
       if (p.error) throw p.error;
       setVehicles(v.data as Vehicle[]);
       setProfiles(p.data as Profile[]);
       setEvents(e);
+      // Страховки не должны ломать остальной кабинет, если что-то пошло не так
+      setPolicies(((ins.data ?? []) as InsurancePolicy[]).map((x) => ({ ...x, cost: x.cost === null ? null : Number(x.cost) })));
     } catch (err) {
       setError(err instanceof Error ? err.message : String((err as { message?: string })?.message ?? err));
     } finally {
@@ -67,5 +72,5 @@ export function useFleet(): Fleet {
   );
   const plateOf = useCallback((id: string) => vehicles.find((v) => v.id === id)?.plate ?? '—', [vehicles]);
 
-  return { vehicles, profiles, events, loading, error, reload, nameOf, plateOf };
+  return { vehicles, profiles, events, policies, loading, error, reload, nameOf, plateOf };
 }

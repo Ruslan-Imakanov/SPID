@@ -62,3 +62,24 @@ export const ROLE_LABEL: Record<Role, string> = {
   admin: 'Руководитель',
   blocked: 'Отключён'
 };
+
+export type InsuranceKind = 'ogpo' | 'kasko' | 'other';
+
+export interface InsurancePolicy {
+  id: string;
+  driver_id: string | null;
+  vehicle_id: string | null;
+  kind: InsuranceKind;
+  company: string;
+  number: string;
+  starts_on: string | null; // YYYY-MM-DD
+  ends_on: string; // YYYY-MM-DD, последний день действия
+  cost: number | null;
+  note: string;
+}
+
+export const INSURANCE_LABEL: Record<InsuranceKind, string> = {
+  ogpo: 'ОГПО',
+  kasko: 'КАСКО',
+  other: 'Другое'
+};

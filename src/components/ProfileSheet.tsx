@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Check, CircleAlert, KeyRound, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { ROLE_LABEL, type Profile } from '../lib/types';
+import { INSURANCE_LABEL, ROLE_LABEL, type InsurancePolicy, type Profile } from '../lib/types';
+import { currentByKind, fmtDate, policyStatus } from '../lib/insurance';
+import InsurancePill from './InsurancePill';
 import { Avatar, Sheet } from './ui';
 
 export function fmtPhone(d: string): string {
@@ -10,7 +12,17 @@ export function fmtPhone(d: string): string {
 }
 
 /** Профиль: смена своего пароля и выход. */
-export default function ProfileSheet({ profile, onClose, onLogout }: { profile: Profile; onClose: () => void; onLogout?: () => void }) {
+export default function ProfileSheet({
+  profile,
+  onClose,
+  onLogout,
+  policies
+}: {
+  profile: Profile;
+  onClose: () => void;
+  onLogout?: () => void;
+  policies?: InsurancePolicy[];
+}) {
   const [pwd, setPwd] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -35,6 +47,23 @@ export default function ProfileSheet({ profile, onClose, onLogout }: { profile: 
           <span className="pill amber">{ROLE_LABEL[profile.role]}</span>
           <span className="muted small">{fmtPhone(profile.phone)}</span>
         </div>
+        {policies && (
+          <div className="stack tight" style={{ gap: 8 }}>
+            <div className="field-label">Моя страховка</div>
+            {currentByKind(policies).length === 0 ? (
+              <div className="small faint">Полис ещё не внесён — уточните у руководителя.</div>
+            ) : (
+              currentByKind(policies).map((p) => (
+                <div key={p.id} className="row wrap" style={{ gap: 8 }}>
+                  <InsurancePill s={policyStatus(p)} />
+                  <span className="small muted">
+                    {[INSURANCE_LABEL[p.kind], p.company, p.number && `№ ${p.number}`, `до ${fmtDate(p.ends_on)}`].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
         <div className="stack" style={{ gap: 8 }}>
           <label className="field">
             <span className="field-label">Новый пароль</span>

@@ -10,11 +10,14 @@ import {
   History,
   Play,
   Route,
+  ShieldAlert,
   Square,
   TriangleAlert
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
+  cachedPolicies,
+  cachePolicies,
   cachedVehicles,
   cacheRecent,
   cacheVehicles,
@@ -29,7 +32,8 @@ import {
 } from '../lib/offline';
 import { dayKey, dayKm } from '../lib/calc';
 import { capitalize, fmtDateTime, fmtNum, fmtTime } from '../lib/format';
-import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, type EventType, type FleetEvent, type Profile, type Vehicle } from '../lib/types';
+import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, INSURANCE_LABEL, type EventType, type FleetEvent, type InsurancePolicy, type Profile, type Vehicle } from '../lib/types';
+import { driverPolicies, fmtDate, summaryStatus } from '../lib/insurance';
 import { Avatar, FUEL_ICON, FuelTag, Logo, Odometer, Plate, Sheet, durationParts, useNow } from '../components/ui';
 import GaugeArt from '../components/GaugeArt';
 import EventForm from './EventForm';
@@ -98,6 +102,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [events, setEvents] = useState<FleetEvent[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
   const [vehicleId, setVehicleId] = useState<string | null>(() => {
     try {
       return localStorage.getItem(VEHICLE_KEY);
@@ -117,10 +122,15 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
   }, []);
 
   const loadServer = useCallback(async () => {
-    const [vRes, eRes] = await Promise.all([
+    const [vRes, eRes, pRes] = await Promise.all([
       supabase.from('vehicles').select('*').eq('active', true).order('plate'),
-      supabase.from('events').select('*').order('occurred_at', { ascending: false }).limit(500)
+      supabase.from('events').select('*').order('occurred_at', { ascending: false }).limit(500),
+      supabase.from('insurance_policies').select('*')
     ]);
+    if (pRes.data) {
+      setPolicies(pRes.data as InsurancePolicy[]);
+      await cachePolicies(pRes.data as InsurancePolicy[]);
+    }
     if (vRes.data) {
       setVehicles(vRes.data as Vehicle[]);
       await cacheVehicles(vRes.data as Vehicle[]);
@@ -132,6 +142,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
   useEffect(() => {
     void (async () => {
       setVehicles(await cachedVehicles());
+      setPolicies(await cachedPolicies());
       await refreshLocal();
       await loadServer();
     })();
@@ -204,6 +215,8 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
   }
 
   const elapsed = shift ? durationParts(shift.occurred_at, now) : null;
+  const myPolicies = driverPolicies(policies, profile.id, vehicles);
+  const ins = summaryStatus(myPolicies, now);
 
   return (
     <div className={embedded ? '' : 'driver'}>
@@ -235,6 +248,27 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
             <div className="muted" style={{ marginTop: 4 }}>
               {todayLabel()}
             </div>
+          </div>
+        )}
+
+        {(ins.tone === 'bad' || ins.tone === 'warn') && ins.policy && (
+          <div className={`note ${ins.tone}`} role="alert">
+            <ShieldAlert size={18} />
+            <span>
+              {ins.days !== null && ins.days < 0 ? (
+                <>
+                  <b>Страховка {INSURANCE_LABEL[ins.policy.kind]} закончилась {fmtDate(ins.policy.ends_on)}.</b> Ездить без полиса нельзя — сообщите
+                  руководителю.
+                </>
+              ) : (
+                <>
+                  <b>
+                    Страховка {INSURANCE_LABEL[ins.policy.kind]} заканчивается {fmtDate(ins.policy.ends_on)}
+                  </b>{' '}
+                  — {ins.label.toLowerCase()}. Напомните руководителю о продлении.
+                </>
+              )}
+            </span>
           </div>
         )}
 
@@ -419,7 +453,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
         </Sheet>
       )}
 
-      {menu && <ProfileSheet profile={profile} onClose={() => setMenu(false)} onLogout={onLogout} />}
+      {menu && <ProfileSheet profile={profile} onClose={() => setMenu(false)} onLogout={onLogout} policies={myPolicies} />}
     </div>
   );
 }

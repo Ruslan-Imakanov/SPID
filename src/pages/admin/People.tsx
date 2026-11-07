@@ -23,6 +23,8 @@ import { ROLE_LABEL, type Profile, type Role } from '../../lib/types';
 import { Avatar, Empty, Plate, Sheet } from '../../components/ui';
 import { fmtPhone } from '../../components/ProfileSheet';
 import type { Fleet } from './useFleet';
+import { driverPolicies, summaryStatus } from '../../lib/insurance';
+import InsurancePill from '../../components/InsurancePill';
 
 const APP_NAME = 'ГСМ Контроль';
 
@@ -461,6 +463,7 @@ export default function People({ fleet, me }: { fleet: Fleet; me: Profile }) {
                       {plates.map((v) => (
                         <Plate key={v.id} plate={v.plate} size="sm" />
                       ))}
+                      {p.role === 'driver' && <InsurancePill s={summaryStatus(driverPolicies(fleet.policies, p.id, fleet.vehicles))} withKind prefix="" />}
                     </div>
                   </div>
                   <ChevronRight size={18} className="faint" />

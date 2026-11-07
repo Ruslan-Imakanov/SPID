@@ -1,7 +1,8 @@
 import writeXlsxFile from 'write-excel-file';
 import { byTime, monthKey, shiftSegments, type Issue, type MonthReport } from './calc';
 import { monthLabel } from './format';
-import { BODY_LABEL, FUEL_LABEL, type FleetEvent, type Profile, type Vehicle } from './types';
+import { BODY_LABEL, FUEL_LABEL, INSURANCE_LABEL, type FleetEvent, type InsurancePolicy, type Profile, type Vehicle } from './types';
+import { daysLeft, policyStatus } from './insurance';
 
 type Cell = { value: string | number | Date | null; type?: typeof String | typeof Number | typeof Date; fontWeight?: 'bold'; format?: string } | null;
 
@@ -9,6 +10,7 @@ interface FleetLike {
   vehicles: Vehicle[];
   profiles: Profile[];
   events: FleetEvent[];
+  policies: InsurancePolicy[];
   nameOf: (id: string | null) => string;
   plateOf: (id: string) => string;
 }
@@ -93,15 +95,32 @@ export async function exportMonthExcel(report: MonthReport, fleet: FleetLike, is
     issuesSheet.push([D(i.at), S(fleet.plateOf(i.vehicleId)), S(fleet.nameOf(i.driverId)), S(i.text)]);
   }
 
+  const insSheet: Cell[][] = [[H('Водитель'), H('Машина'), H('Вид'), H('Страховая'), H('Номер'), H('Начало'), H('Окончание'), H('Осталось дней'), H('Статус'), H('Стоимость, ₸')]];
+  for (const p of [...fleet.policies].sort((a, b) => a.ends_on.localeCompare(b.ends_on))) {
+    insSheet.push([
+      S(p.driver_id ? fleet.nameOf(p.driver_id) : 'любой водитель'),
+      S(p.vehicle_id ? fleet.plateOf(p.vehicle_id) : ''),
+      S(INSURANCE_LABEL[p.kind]),
+      S(p.company),
+      S(p.number),
+      S(p.starts_on ? p.starts_on.split('-').reverse().join('.') : ''),
+      S(p.ends_on.split('-').reverse().join('.')),
+      N(daysLeft(p.ends_on)),
+      S(policyStatus(p).label),
+      N(p.cost)
+    ]);
+  }
+
   const w = (widths: number[]) => widths.map((width) => ({ width }));
-  await writeXlsxFile([vehiclesSheet, driversSheet, refuelSheet, shiftSheet, issuesSheet] as never, {
-    sheets: ['Машины', 'Водители', 'Заправки', 'Смены', 'Замечания'],
+  await writeXlsxFile([vehiclesSheet, driversSheet, refuelSheet, shiftSheet, issuesSheet, insSheet] as never, {
+    sheets: ['Машины', 'Водители', 'Заправки', 'Смены', 'Замечания', 'Страховки'],
     columns: [
       w([10, 18, 10, 11, 9, 10, 12, 10, 12, 12, 11, 13, 14]),
       w([24, 7, 11, 9, 9, 11, 18, 20]),
       w([16, 10, 24, 11, 9, 9, 12, 10, 30]),
       w([16, 16, 10, 24, 11, 11, 11]),
-      w([16, 10, 24, 80])
+      w([16, 10, 24, 80]),
+      w([24, 10, 9, 22, 16, 12, 12, 14, 22, 14])
     ],
     fileName: `ГСМ Контроль — ${monthLabel(month)}.xlsx`
   } as never);

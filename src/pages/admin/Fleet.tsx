@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Clock3, Fuel, Route, ScrollText, TriangleAlert, Truck } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Clock3, Fuel, Route, ScrollText, ShieldAlert, TriangleAlert, Truck } from 'lucide-react';
 import { byTime, dayKey, findIssues, monthKey, monthKm, sum, vehicleStatus, type FuelNow, type VehicleStatus } from '../../lib/calc';
 import { capitalize, fmtDateTime, fmtNum, fmtTenge, fmtTime } from '../../lib/format';
-import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, type Fuel as FuelT } from '../../lib/types';
+import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, INSURANCE_LABEL, type Fuel as FuelT } from '../../lib/types';
 import { Avatar, Empty, FuelTag, Odometer, Plate, Sheet, Stat, useNow } from '../../components/ui';
 import { Columns, type ColDatum } from '../../components/charts';
 import { EventIcon } from '../DriverApp';
 import type { Fleet as FleetData } from './useFleet';
+import { summaryStatus, vehiclePolicies, plural, type InsStatus } from '../../lib/insurance';
+import InsurancePill from '../../components/InsurancePill';
+import { insuranceRows } from './Insurance';
 
 const DAY = 86_400_000;
 
@@ -62,7 +65,7 @@ export function Deviation({ value, compact }: { value: number | null; compact?: 
   );
 }
 
-function FleetCard({ s, now, nameOf, onOpen }: { s: VehicleStatus; now: number; nameOf: (id: string | null) => string; onOpen: () => void }) {
+function FleetCard({ s, now, nameOf, onOpen, ins }: { s: VehicleStatus; now: number; nameOf: (id: string | null) => string; onOpen: () => void; ins: InsStatus | null }) {
   const v = s.vehicle;
   const f = mainFuel(s);
   return (
@@ -86,6 +89,7 @@ function FleetCard({ s, now, nameOf, onOpen }: { s: VehicleStatus; now: number; 
         {v.fuels.map((x) => (
           <FuelTag key={x} fuel={x} />
         ))}
+        {ins && <InsurancePill s={ins} prefix={ins.policy ? `Страховка ${INSURANCE_LABEL[ins.policy.kind]}: ` : 'Страховка: '} />}
       </div>
       <div className="row" style={{ minHeight: 28 }}>
         {s.shift ? (
@@ -284,11 +288,13 @@ function VehicleSheet({
 export default function Fleet({
   fleet,
   onOpenJournal,
-  onOpenIssues
+  onOpenIssues,
+  onOpenInsurance
 }: {
   fleet: FleetData;
   onOpenJournal: (vehicleId: string) => void;
   onOpenIssues: () => void;
+  onOpenInsurance: () => void;
 }) {
   const now = useNow(60_000);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -315,6 +321,16 @@ export default function Fleet({
     [fleet.vehicles, fleet.events, now]
   );
   const open = statuses.find((s) => s.vehicle.id === openId) ?? null;
+  // Страховки: машине показываем отметку, только если полис скоро кончается, просрочен или его нет (когда учёт уже ведётся)
+  const insOf = (v: VehicleStatus['vehicle']): InsStatus | null => {
+    const st = summaryStatus(vehiclePolicies(fleet.policies, v));
+    if (st.tone === 'bad' || st.tone === 'warn') return st;
+    if (st.tone === 'none' && fleet.policies.length > 0) return st;
+    return null;
+  };
+  const insRows = insuranceRows(fleet, 'drivers');
+  const insBad = insRows.filter((r) => r.status.tone === 'bad').length;
+  const insWarn = insRows.filter((r) => r.status.tone === 'warn').length;
 
   return (
     <div className="page">
@@ -353,6 +369,20 @@ export default function Fleet({
         </button>
       </div>
 
+      {insBad + insWarn > 0 && (
+        <button className={`note ${insBad ? 'bad' : 'warn'} section`} style={{ width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit' }} onClick={onOpenInsurance}>
+          <ShieldAlert size={18} />
+          <span className="grow">
+            <b>Страховки.</b>{' '}
+            {[insBad && `${plural(insBad, ['водитель', 'водителя', 'водителей'])}: полис просрочен или осталось меньше недели`, insWarn && `${plural(insWarn, ['водитель', 'водителя', 'водителей'])}: истекает в течение 30 дней`]
+              .filter(Boolean)
+              .join('; ')}
+            .
+          </span>
+          <span style={{ fontWeight: 650, whiteSpace: 'nowrap' }}>Открыть →</span>
+        </button>
+      )}
+
       <div className="section">
         {statuses.length === 0 ? (
           <div className="card">
@@ -361,7 +391,7 @@ export default function Fleet({
         ) : (
           <div className="grid-cards">
             {sorted.map((s) => (
-              <FleetCard key={s.vehicle.id} s={s} now={now} nameOf={fleet.nameOf} onOpen={() => setOpenId(s.vehicle.id)} />
+              <FleetCard key={s.vehicle.id} s={s} now={now} nameOf={fleet.nameOf} onOpen={() => setOpenId(s.vehicle.id)} ins={insOf(s.vehicle)} />
             ))}
           </div>
         )}

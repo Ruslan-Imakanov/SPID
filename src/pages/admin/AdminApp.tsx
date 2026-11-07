@@ -8,6 +8,7 @@ import {
   Menu,
   RefreshCw,
   ScrollText,
+  ShieldCheck,
   TriangleAlert,
   Truck,
   Users,
@@ -25,8 +26,9 @@ import Issues from './Issues';
 import Journal from './Journal';
 import Vehicles from './Vehicles';
 import People from './People';
+import Insurance, { insuranceRows } from './Insurance';
 
-export type Tab = 'fleet' | 'report' | 'issues' | 'journal' | 'vehicles' | 'people' | 'input';
+export type Tab = 'fleet' | 'report' | 'issues' | 'journal' | 'vehicles' | 'people' | 'insurance' | 'input';
 
 const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'fleet', label: 'Парк', icon: LayoutGrid },
@@ -35,6 +37,7 @@ const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'journal', label: 'Журнал', icon: ScrollText },
   { id: 'vehicles', label: 'Машины', icon: Truck },
   { id: 'people', label: 'Сотрудники', icon: Users },
+  { id: 'insurance', label: 'Страховки', icon: ShieldCheck },
   { id: 'input', label: 'Ввод показаний', icon: Gauge }
 ];
 const BOTTOM: Tab[] = ['fleet', 'report', 'issues', 'journal'];
@@ -51,7 +54,8 @@ export default function AdminApp({ profile, onLogout }: { profile: Profile; onLo
     const since = Date.now() - 7 * 86_400_000;
     return findIssues(fleet.vehicles, fleet.events).filter((i) => i.severity === 'high' && Date.parse(i.at) >= since).length;
   }, [fleet.vehicles, fleet.events]);
-  const badge = (id: Tab) => (id === 'people' ? pending : id === 'issues' ? issuesWeek : 0);
+  const insAttention = useMemo(() => insuranceRows(fleet, 'drivers').filter((r) => r.status.tone === 'bad' || r.status.tone === 'warn').length, [fleet]);
+  const badge = (id: Tab) => (id === 'people' ? pending : id === 'issues' ? issuesWeek : id === 'insurance' ? insAttention : 0);
 
   const go = (t: Tab) => {
     setTab(t);
@@ -74,7 +78,7 @@ export default function AdminApp({ profile, onLogout }: { profile: Profile; onLo
             <button key={n.id} className={tab === n.id ? 'active' : ''} onClick={() => go(n.id)} aria-current={tab === n.id ? 'page' : undefined}>
               <n.icon size={20} />
               <span className="label">{n.label}</span>
-              {badge(n.id) > 0 && <span className={`count${n.id === 'people' ? ' amber' : ''}`}>{badge(n.id)}</span>}
+              {badge(n.id) > 0 && <span className={`count${n.id === 'people' || n.id === 'insurance' ? ' amber' : ''}`}>{badge(n.id)}</span>}
             </button>
           ))}
         </nav>
@@ -119,12 +123,13 @@ export default function AdminApp({ profile, onLogout }: { profile: Profile; onLo
           </div>
         )}
 
-        {tab === 'fleet' && <Fleet fleet={fleet} onOpenJournal={openJournal} onOpenIssues={() => go('issues')} />}
+        {tab === 'fleet' && <Fleet fleet={fleet} onOpenJournal={openJournal} onOpenIssues={() => go('issues')} onOpenInsurance={() => go('insurance')} />}
         {tab === 'report' && <Report fleet={fleet} />}
         {tab === 'issues' && <Issues fleet={fleet} />}
         {tab === 'journal' && <Journal fleet={fleet} vehicleId={journalVehicle} onVehicleChange={setJournalVehicle} />}
         {tab === 'vehicles' && <Vehicles fleet={fleet} />}
         {tab === 'people' && <People fleet={fleet} me={profile} />}
+        {tab === 'insurance' && <Insurance fleet={fleet} />}
         {tab === 'input' && <DriverApp profile={profile} embedded />}
       </div>
 
@@ -146,7 +151,7 @@ export default function AdminApp({ profile, onLogout }: { profile: Profile; onLo
             <Menu size={21} />
           </span>
           Ещё
-          {pending > 0 && <span className="count amber">{pending}</span>}
+          {pending + insAttention > 0 && <span className="count amber">{pending + insAttention}</span>}
         </button>
       </nav>
 
