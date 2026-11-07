@@ -8,25 +8,25 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'СПИД — учёт топлива',
-        short_name: 'СПИД',
+        name: 'ГСМ Контроль — учёт топлива',
+        short_name: 'ГСМ Контроль',
         description: 'Учёт пробега и расхода топлива автопарка',
         lang: 'ru',
         start_url: './',
         display: 'standalone',
-        background_color: '#f4f5f7',
-        theme_color: '#1f4e8c',
+        background_color: '#0B1322',
+        theme_color: '#0B1322',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
       workbox: {
         navigateFallback: 'index.html',
-        globPatterns: ['**/*.{js,css,html,svg,png}']
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}']
       }
     })
   ],

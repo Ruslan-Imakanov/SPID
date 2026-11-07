@@ -1,14 +1,33 @@
 import { useMemo, useState } from 'react';
-import { monthKey } from '../../lib/calc';
-import { currentMonth, fmtDateTime, fmtNum, fmtTenge } from '../../lib/format';
+import { Camera, ChevronRight, Receipt, ScrollText } from 'lucide-react';
+import { dayKey, monthKey } from '../../lib/calc';
+import { capitalize, currentMonth, fmtNum, fmtTenge, fmtTime } from '../../lib/format';
 import { EVENT_LABEL, FUEL_LABEL, type EventType, type FleetEvent } from '../../lib/types';
-import MonthNav from '../../components/MonthNav';
+import { Empty, Plate } from '../../components/ui';
+import { EventIcon } from '../DriverApp';
 import EventDetail from './EventDetail';
+import { MonthNav } from './Report';
 import type { Fleet } from './useFleet';
 
-export default function Journal({ fleet }: { fleet: Fleet }) {
+function dayTitle(key: string): string {
+  const today = dayKey(Date.now());
+  const yesterday = dayKey(Date.now() - 86_400_000);
+  if (key === today) return 'Сегодня';
+  if (key === yesterday) return 'Вчера';
+  const [y, m, d] = key.split('-').map(Number);
+  return capitalize(new Date(y, m - 1, d).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' }));
+}
+
+export default function Journal({
+  fleet,
+  vehicleId,
+  onVehicleChange
+}: {
+  fleet: Fleet;
+  vehicleId: string;
+  onVehicleChange: (id: string) => void;
+}) {
   const [month, setMonth] = useState(currentMonth());
-  const [vehicleId, setVehicleId] = useState('');
   const [driverId, setDriverId] = useState('');
   const [type, setType] = useState<EventType | ''>('');
   const [open, setOpen] = useState<FleetEvent | null>(null);
@@ -27,12 +46,24 @@ export default function Journal({ fleet }: { fleet: Fleet }) {
         .reverse(),
     [fleet.events, month, vehicleId, driverId, type]
   );
+  const byDay = useMemo(() => {
+    const m = new Map<string, FleetEvent[]>();
+    for (const e of rows) {
+      const k = dayKey(e.occurred_at);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(e);
+    }
+    return [...m.entries()];
+  }, [rows]);
 
   return (
     <div className="page">
-      <div className="row" style={{ marginBottom: 16 }}>
+      <div className="page-head">
+        <h1 className="h1">Журнал</h1>
         <MonthNav value={month} onChange={setMonth} />
-        <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} style={{ width: 'auto' }}>
+      </div>
+      <div className="row wrap" style={{ marginBottom: 12 }}>
+        <select className="input compact" value={vehicleId} onChange={(e) => onVehicleChange(e.target.value)} aria-label="Машина">
           <option value="">Все машины</option>
           {fleet.vehicles.map((v) => (
             <option key={v.id} value={v.id}>
@@ -40,65 +71,71 @@ export default function Journal({ fleet }: { fleet: Fleet }) {
             </option>
           ))}
         </select>
-        <select value={driverId} onChange={(e) => setDriverId(e.target.value)} style={{ width: 'auto' }}>
-          <option value="">Все водители</option>
+        <select className="input compact" value={driverId} onChange={(e) => setDriverId(e.target.value)} aria-label="Сотрудник">
+          <option value="">Все сотрудники</option>
           {fleet.profiles
-            .filter((p) => p.role !== 'pending')
+            .filter((p) => p.role === 'driver' || p.role === 'admin')
             .map((p) => (
               <option key={p.id} value={p.id}>
                 {p.full_name || p.phone}
               </option>
             ))}
         </select>
-        <select value={type} onChange={(e) => setType(e.target.value as EventType | '')} style={{ width: 'auto' }}>
-          <option value="">Все записи</option>
-          <option value="shift_start">Начало смены</option>
-          <option value="shift_end">Конец смены</option>
-          <option value="refuel">Заправки</option>
-        </select>
+      </div>
+      <div className="chips" style={{ marginBottom: 16 }}>
+        {(
+          [
+            ['', 'Все записи'],
+            ['shift_start', 'Начало смены'],
+            ['shift_end', 'Конец смены'],
+            ['refuel', 'Заправки']
+          ] as [EventType | '', string][]
+        ).map(([t, label]) => (
+          <button key={t || 'all'} className={`chip${type === t ? ' active' : ''}`} onClick={() => setType(t)}>
+            {label}
+          </button>
+        ))}
       </div>
 
       <div className="card">
         {rows.length === 0 ? (
-          <div className="muted">Записей нет</div>
+          <Empty icon={ScrollText} title="Записей нет" text="Смените месяц или фильтры." />
         ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Дата</th>
-                  <th>Машина</th>
-                  <th>Водитель</th>
-                  <th>Запись</th>
-                  <th className="r">Пробег</th>
-                  <th>Заправка</th>
-                  <th>Фото</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((e) => (
-                  <tr key={e.id} className="click" onClick={() => setOpen(e)}>
-                    <td className="num">{fmtDateTime(e.occurred_at)}</td>
-                    <td>
-                      <b>{fleet.plateOf(e.vehicle_id)}</b>
-                    </td>
-                    <td>{fleet.nameOf(e.driver_id)}</td>
-                    <td>{EVENT_LABEL[e.type]}</td>
-                    <td className="r num">{fmtNum(e.odometer)}</td>
-                    <td className="small">
-                      {e.type === 'refuel' && e.fuel && (
-                        <>
-                          {FUEL_LABEL[e.fuel]} {fmtNum(e.liters, 1)} л · {fmtTenge(e.amount)}
-                          {e.full_tank ? '' : ' · неполный'}
-                        </>
-                      )}
-                    </td>
-                    <td className="small">{[e.odometer_photo && '📷', e.receipt_photo && '🧾'].filter(Boolean).join(' ')}</td>
-                  </tr>
+          byDay.map(([day, list]) => (
+            <div key={day}>
+              <div className="day-head eyebrow" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 13 }}>
+                {dayTitle(day)} · {list.length}
+              </div>
+              <div className="list">
+                {list.map((e) => (
+                  <div className="list-row click" key={e.id} role="button" tabIndex={0} onClick={() => setOpen(e)} onKeyDown={(k) => k.key === 'Enter' && setOpen(e)}>
+                    <EventIcon e={e} />
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="row wrap" style={{ gap: 8 }}>
+                        <b>{EVENT_LABEL[e.type]}</b>
+                        <Plate plate={fleet.plateOf(e.vehicle_id)} size="sm" />
+                      </div>
+                      <div className="small faint" style={{ marginTop: 2 }}>
+                        {fmtTime(e.occurred_at)} · {fleet.nameOf(e.driver_id)} · {fmtNum(e.odometer)} км
+                        {e.type === 'refuel' && e.fuel && (
+                          <>
+                            {' '}
+                            · {FUEL_LABEL[e.fuel]} {fmtNum(e.liters, 1)} л · {fmtTenge(e.amount)}
+                            {e.full_tank ? '' : ' · неполный бак'}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <span className="row faint" style={{ gap: 4 }}>
+                      {e.odometer_photo && <Camera size={16} aria-label="есть фото одометра" />}
+                      {e.receipt_photo && <Receipt size={16} aria-label="есть фото чека" />}
+                    </span>
+                    <ChevronRight size={18} className="faint" />
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
       {open && <EventDetail event={open} fleet={fleet} onClose={() => setOpen(null)} />}

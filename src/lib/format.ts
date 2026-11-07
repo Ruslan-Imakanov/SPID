@@ -62,3 +62,16 @@ export function uuid(): string {
     return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
+
+const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+/** «7 ноября» для дня месяца key («2026-11»). */
+export function dayMonthLabel(day: number, key: string): string {
+  const m = Number(key.split('-')[1]);
+  return `${day} ${MONTHS_GEN[m - 1]}`;
+}
+
+/** Заглавная только первая буква: «суббота, 7 ноября» → «Суббота, 7 ноября». */
+export function capitalize(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}

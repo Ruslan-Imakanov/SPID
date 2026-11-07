@@ -12,9 +12,10 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.webmanifest': 'application/manifest+json',
+  '.woff2': 'font/woff2',
   '.json': 'application/json'
 };
-const BINARY = new Set(['.png']);
+const BINARY = new Set(['.png', '.woff2']);
 
 function walk(dir) {
   return readdirSync(dir).flatMap((f) => {

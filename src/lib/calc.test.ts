@@ -152,3 +152,54 @@ describe('отчёт за месяц', () => {
     expect(r.drivers[0].overLiters).toBeCloseTo(24);
   });
 });
+
+import { dailySpend, dayKm, vehicleStatus } from './calc';
+
+describe('новые расчёты для экранов', () => {
+  it('затраты по дням месяца раскладываются по видам топлива', () => {
+    const events = [
+      refuel(1000, '2026-10-03', 40, true, 'petrol'),
+      refuel(1100, '2026-10-03', 30, true, 'lpg'),
+      refuel(1300, '2026-10-05', 50, true, 'petrol'),
+      refuel(1400, '2026-11-01', 50, true, 'petrol')
+    ];
+    const days = dailySpend(events, '2026-10');
+    expect(days).toHaveLength(31);
+    expect(days[2].amount.petrol).toBe(40 * 250);
+    expect(days[2].amount.lpg).toBe(30 * 250);
+    expect(days[4].liters.petrol).toBe(50);
+    expect(days.reduce((a, d) => a + d.amount.petrol, 0)).toBe(90 * 250);
+  });
+
+  it('пробег за день и состояние машины: на линии / смена забыта', () => {
+    const now = Date.parse('2026-10-02T15:00:00Z');
+    const events = [
+      ev({ type: 'shift_start', odometer: 1000, occurred_at: '2026-10-01T08:00:00Z', driver_id: 'a' }),
+      ev({ type: 'shift_end', odometer: 1200, occurred_at: '2026-10-01T18:00:00Z', driver_id: 'a' }),
+      ev({ type: 'shift_start', odometer: 1200, occurred_at: '2026-10-02T08:00:00Z', driver_id: 'b' }),
+      refuel(1290, '2026-10-02', 60)
+    ];
+    expect(dayKm(events, '2026-10-02')).toBe(90);
+    const st = vehicleStatus(van, events, now);
+    expect(st.shift?.driverId).toBe('b');
+    expect(st.shift?.stale).toBe(false);
+    expect(st.todayKm).toBe(90);
+    expect(st.lastRefuel?.liters).toBe(60);
+
+    const later = vehicleStatus(van, events, Date.parse('2026-10-04T15:00:00Z'));
+    expect(later.shift?.stale).toBe(true);
+  });
+
+  it('средний расход по последним трём интервалам и отклонение от нормы', () => {
+    // 4 нормальных интервала по 18 л/100, затем 3 интервала с перерасходом 24 л/100
+    const events = [refuel(1000, '2026-10-01', 60)];
+    for (let i = 1; i <= 4; i++) events.push(refuel(1000 + i * 400, `2026-10-${String(1 + i * 2).padStart(2, '0')}`, 72));
+    for (let i = 5; i <= 7; i++) events.push(refuel(1000 + i * 400, `2026-10-${String(1 + i * 2).padStart(2, '0')}`, 96));
+    const st = vehicleStatus(van, events, Date.parse('2026-10-20T00:00:00Z'));
+    const f = st.fuels[0];
+    expect(f.recent).toBeCloseTo(24);
+    // Норма не «подтянулась» к свежему перерасходу
+    expect(f.baseline).toBeCloseTo(18);
+    expect(f.deviation).toBeCloseTo(24 / 18 - 1);
+  });
+});

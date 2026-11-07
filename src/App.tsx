@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { Ban, Hourglass, LogOut, RefreshCw, Settings } from 'lucide-react';
 import { configured, supabase } from './lib/supabase';
 import type { Profile } from './lib/types';
+import { Logo } from './components/ui';
 import Login from './pages/Login';
 import DriverApp from './pages/DriverApp';
 import AdminApp from './pages/admin/AdminApp';
@@ -15,6 +17,38 @@ function cachedProfile(): Profile | null {
   } catch {
     return null;
   }
+}
+
+function StatusScreen({
+  icon: Icon,
+  title,
+  text,
+  children
+}: {
+  icon: typeof Hourglass;
+  title: string;
+  text: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="center-screen" style={{ background: 'var(--ink)' }}>
+      <div className="stack loose" style={{ width: '100%', maxWidth: 420 }}>
+        <div style={{ color: 'var(--on-ink)', display: 'flex', justifyContent: 'center' }}>
+          <Logo size={44} />
+        </div>
+        <div className="card pad-lg stack status-screen">
+          <span className="status-ico">
+            <Icon size={30} />
+          </span>
+          <h1 className="h1" style={{ fontSize: 21 }}>
+            {title}
+          </h1>
+          <p className="muted">{text}</p>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function App() {
@@ -65,61 +99,63 @@ export default function App() {
 
   if (!configured) {
     return (
-      <div className="center-screen">
-        <div className="card">
-          <h1>Нужна настройка</h1>
-          <p className="muted">
-            Не заданы адрес и ключ Supabase. Создайте файл <code>.env</code> по образцу <code>.env.example</code> и пересоберите
-            приложение.
-          </p>
-        </div>
-      </div>
+      <StatusScreen
+        icon={Settings}
+        title="Нужна настройка"
+        text="Не заданы адрес и ключ Supabase. Создайте файл .env по образцу .env.example и пересоберите приложение."
+      />
     );
   }
 
-  if (session === undefined) return <div className="center-screen muted">Загрузка…</div>;
+  if (session === undefined) {
+    return (
+      <div className="center-screen" style={{ background: 'var(--ink)', color: 'var(--on-ink)' }}>
+        <Logo size={48} />
+      </div>
+    );
+  }
   if (!session) return <Login />;
 
   if (!profile) {
     return (
-      <div className="center-screen">
-        <div className="card stack">
-          {profileError ? <div className="note bad">{profileError}</div> : <div className="muted">Загрузка профиля…</div>}
-          {profileError && (
-            <div className="row">
-              <button className="btn" onClick={() => void loadProfile()}>
-                Повторить
-              </button>
-              <button className="btn" onClick={() => void logout()}>
-                Выйти
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <StatusScreen icon={RefreshCw} title={profileError ? 'Не удалось загрузить профиль' : 'Загрузка…'} text={profileError ?? 'Секунду…'}>
+        {profileError && (
+          <div className="row" style={{ justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={() => void loadProfile()}>
+              <RefreshCw size={18} /> Повторить
+            </button>
+            <button className="btn" onClick={() => void logout()}>
+              <LogOut size={18} /> Выйти
+            </button>
+          </div>
+        )}
+      </StatusScreen>
     );
   }
 
   if (profile.role === 'pending' || profile.role === 'blocked') {
+    const pending = profile.role === 'pending';
     return (
-      <div className="center-screen">
-        <div className="card stack">
-          <h1>{profile.role === 'pending' ? 'Ждём подтверждения' : 'Доступ отключён'}</h1>
-          <p className="muted">
-            {profile.role === 'pending'
-              ? `${profile.full_name || 'Вы'} зарегистрированы. Руководитель должен подтвердить доступ, после этого нажмите «Обновить».`
-              : 'Обратитесь к руководителю.'}
-          </p>
-          <div className="row">
-            <button className="btn primary" onClick={() => void loadProfile()}>
-              Обновить
+      <StatusScreen
+        icon={pending ? Hourglass : Ban}
+        title={pending ? 'Ждём подтверждения' : 'Доступ отключён'}
+        text={
+          pending
+            ? `${profile.full_name || 'Вы'}, регистрация прошла. Руководитель должен подтвердить доступ — после этого нажмите «Обновить».`
+            : 'Ваш доступ отключён. Обратитесь к руководителю.'
+        }
+      >
+        <div className="row" style={{ justifyContent: 'center' }}>
+          {pending && (
+            <button className="btn btn-primary" onClick={() => void loadProfile()}>
+              <RefreshCw size={18} /> Обновить
             </button>
-            <button className="btn" onClick={() => void logout()}>
-              Выйти
-            </button>
-          </div>
+          )}
+          <button className="btn" onClick={() => void logout()}>
+            <LogOut size={18} /> Выйти
+          </button>
         </div>
-      </div>
+      </StatusScreen>
     );
   }
 

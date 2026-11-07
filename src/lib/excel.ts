@@ -103,6 +103,6 @@ export async function exportMonthExcel(report: MonthReport, fleet: FleetLike, is
       w([16, 16, 10, 24, 11, 11, 11]),
       w([16, 10, 24, 80])
     ],
-    fileName: `Топливо ${monthLabel(month)}.xlsx`
+    fileName: `ГСМ Контроль — ${monthLabel(month)}.xlsx`
   } as never);
 }

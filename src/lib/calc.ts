@@ -17,7 +17,9 @@ export const STRONG_OVERUSE = 0.25;
 export const SUSPICIOUS_LOW = 0.4;
 /** Сколько интервалов нужно для нормы. */
 export const BASELINE_MIN_INTERVALS = 3;
-export const BASELINE_MAX_INTERVALS = 6;
+export const BASELINE_MAX_INTERVALS = 12;
+/** Сколько последних интервалов считается «текущим» расходом машины. */
+export const RECENT_INTERVALS = 3;
 export const BASELINE_WINDOW_DAYS = 120;
 /** Интервалы короче этого слишком неточные (бак «до полного» каждый раз заливается чуть по-разному). */
 export const MIN_INTERVAL_KM = 30;
@@ -36,6 +38,11 @@ export function byTime(a: FleetEvent, b: FleetEvent): number {
 export function monthKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+export function dayKey(iso: string | number): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function median(values: number[]): number | null {
@@ -146,13 +153,17 @@ export function buildIntervals(vehicleId: string, fuel: Fuel, events: FleetEvent
   return result;
 }
 
-/** Текущая норма машины по топливу: медиана последних интервалов. */
+/**
+ * Текущая норма машины по топливу: медиана интервалов ДО последних RECENT_INTERVALS
+ * (их сравнивают с нормой), чтобы свежий перерасход не «подтягивал» норму под себя.
+ */
 export function currentBaseline(intervals: FuelInterval[], now = Date.now()): number | null {
-  const recent = intervals
+  const history = intervals
+    .slice(0, Math.max(0, intervals.length - RECENT_INTERVALS))
     .filter((x) => now - Date.parse(x.endAt) <= BASELINE_WINDOW_DAYS * DAY)
     .slice(-BASELINE_MAX_INTERVALS);
-  if (recent.length < BASELINE_MIN_INTERVALS) return null;
-  return median(recent.map((x) => x.consumption));
+  if (history.length < BASELINE_MIN_INTERVALS) return null;
+  return median(history.map((x) => x.consumption));
 }
 
 // ───────────────────────── Смены ─────────────────────────
@@ -217,15 +228,25 @@ export function attributeKm(
 
 // ───────────────────────── Пробег за месяц ─────────────────────────
 
+/** Пробег машины за период (месяц «2026-11» или день «2026-11-07») по показаниям одометра. */
+function periodKm(vehicleEvents: FleetEvent[], key: (iso: string) => string, period: string): number {
+  const sorted = [...vehicleEvents].sort(byTime);
+  const inPeriod = sorted.filter((e) => key(e.occurred_at) === period);
+  if (inPeriod.length === 0) return 0;
+  const before = sorted.filter((e) => key(e.occurred_at) < period);
+  const start = before.length ? before[before.length - 1].odometer : inPeriod[0].odometer;
+  const end = Math.max(...inPeriod.map((e) => e.odometer));
+  return Math.max(0, end - start);
+}
+
 /** Пробег машины за месяц по показаниям одометра. */
 export function monthKm(vehicleEvents: FleetEvent[], month: string): number {
-  const sorted = [...vehicleEvents].sort(byTime);
-  const inMonth = sorted.filter((e) => monthKey(e.occurred_at) === month);
-  if (inMonth.length === 0) return 0;
-  const before = sorted.filter((e) => monthKey(e.occurred_at) < month);
-  const start = before.length ? before[before.length - 1].odometer : inMonth[0].odometer;
-  const end = Math.max(...inMonth.map((e) => e.odometer));
-  return Math.max(0, end - start);
+  return periodKm(vehicleEvents, monthKey, month);
+}
+
+/** Пробег машины за день. */
+export function dayKm(vehicleEvents: FleetEvent[], day: string): number {
+  return periodKm(vehicleEvents, dayKey, day);
 }
 
 // ───────────────────────── Отчёт за месяц ─────────────────────────
@@ -428,7 +449,7 @@ function buildGroups(rows: VehicleMonth[]): GroupRow[] {
   const groups = new Map<string, GroupRow>();
   for (const r of rows) {
     for (const f of r.fuels) {
-      const key = `${r.vehicle.model}|${r.vehicle.body}|${f.fuel}`;
+      const key = `${r.vehicle.model}|${r.vehicle.body}|${[...r.vehicle.fuels].sort().join('+')}|${f.fuel}`;
       let g = groups.get(key);
       if (!g) {
         const body = r.vehicle.body === '6m' ? ', 6 м' : r.vehicle.body === 'standard' ? ', стандарт' : '';
@@ -589,4 +610,89 @@ function round2(x: number): number {
 
 export function fmtKm(km: number): string {
   return `${Math.round(km).toLocaleString('ru-RU')} км`;
+}
+
+// ───────────────────────── Затраты по дням ─────────────────────────
+
+export interface DaySpend {
+  day: number;
+  amount: Record<Fuel, number>;
+  liters: Record<Fuel, number>;
+}
+
+export function dailySpend(events: FleetEvent[], month: string): DaySpend[] {
+  const [y, m] = month.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  const out: DaySpend[] = Array.from({ length: days }, (_, i) => ({
+    day: i + 1,
+    amount: { petrol: 0, lpg: 0, diesel: 0 },
+    liters: { petrol: 0, lpg: 0, diesel: 0 }
+  }));
+  for (const e of events) {
+    if (e.type !== 'refuel' || !e.fuel || monthKey(e.occurred_at) !== month) continue;
+    const d = new Date(e.occurred_at).getDate();
+    out[d - 1].amount[e.fuel] += e.amount ?? 0;
+    out[d - 1].liters[e.fuel] += e.liters ?? 0;
+  }
+  return out;
+}
+
+// ───────────────────────── Состояние парка ─────────────────────────
+
+/** Смена считается «забытой», если открыта дольше этого времени. */
+export const STALE_SHIFT_HOURS = 20;
+
+export interface FuelNow {
+  fuel: Fuel;
+  /** Средний расход по последним 3 интервалам, л/100 км. */
+  recent: number | null;
+  baseline: number | null;
+  deviation: number | null;
+  intervals: FuelInterval[];
+}
+
+export interface VehicleStatus {
+  vehicle: Vehicle;
+  shift: { driverId: string; since: string; startOdo: number; stale: boolean } | null;
+  last: FleetEvent | null;
+  lastRefuel: FleetEvent | null;
+  todayKm: number;
+  fuels: FuelNow[];
+}
+
+export function vehicleStatus(v: Vehicle, events: FleetEvent[], now = Date.now()): VehicleStatus {
+  const ve = events.filter((e) => e.vehicle_id === v.id).sort(byTime);
+  const open = new Map<string, FleetEvent>();
+  for (const e of ve) {
+    if (e.type === 'shift_start') open.set(e.driver_id, e);
+    else if (e.type === 'shift_end') open.delete(e.driver_id);
+  }
+  let shiftStart: FleetEvent | null = null;
+  for (const e of open.values()) if (!shiftStart || byTime(e, shiftStart) > 0) shiftStart = e;
+
+  const refuels = ve.filter((e) => e.type === 'refuel');
+  const fuels: FuelNow[] = v.fuels.map((f) => {
+    const intervals = buildIntervals(v.id, f, ve);
+    const last3 = intervals.slice(-RECENT_INTERVALS);
+    const km = sum(last3.map((x) => x.km));
+    const recent = km > 0 ? (sum(last3.map((x) => x.liters)) / km) * 100 : null;
+    const baseline = currentBaseline(intervals, now);
+    return { fuel: f, recent, baseline, deviation: recent !== null && baseline ? recent / baseline - 1 : null, intervals };
+  });
+
+  return {
+    vehicle: v,
+    shift: shiftStart
+      ? {
+          driverId: shiftStart.driver_id,
+          since: shiftStart.occurred_at,
+          startOdo: shiftStart.odometer,
+          stale: now - Date.parse(shiftStart.occurred_at) > STALE_SHIFT_HOURS * 3_600_000
+        }
+      : null,
+    last: ve.length ? ve[ve.length - 1] : null,
+    lastRefuel: refuels.length ? refuels[refuels.length - 1] : null,
+    todayKm: dayKm(ve, dayKey(now)),
+    fuels
+  };
 }

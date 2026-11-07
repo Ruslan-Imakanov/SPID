@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { CircleAlert, ImageOff, Save, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { fmtDateTime } from '../../lib/format';
-import { EVENT_LABEL, FUEL_LABEL, type FleetEvent } from '../../lib/types';
+import { EVENT_LABEL, type FleetEvent } from '../../lib/types';
+import { FuelTag, Plate, Sheet, Switch } from '../../components/ui';
+import { EventIcon } from '../DriverApp';
 import type { Fleet } from './useFleet';
 
 function SignedPhoto({ path, alt }: { path: string; alt: string }) {
@@ -21,11 +24,16 @@ function SignedPhoto({ path, alt }: { path: string; alt: string }) {
       alive = false;
     };
   }, [path]);
-  if (err) return <div className="note bad small">Не удалось загрузить фото</div>;
-  if (!url) return <div className="muted small">Загрузка фото…</div>;
+  if (err)
+    return (
+      <div className="note bad">
+        <ImageOff size={18} /> Не удалось загрузить фото
+      </div>
+    );
+  if (!url) return <div className="photo-tile" style={{ minHeight: 200 }}>Загрузка фото…</div>;
   return (
-    <a href={url} target="_blank" rel="noreferrer">
-      <img className="photo-preview" src={url} alt={alt} />
+    <a href={url} target="_blank" rel="noreferrer" className="photo-tile has-photo" style={{ minHeight: 240 }}>
+      <img src={url} alt={alt} style={{ objectFit: 'contain' }} />
     </a>
   );
 }
@@ -72,60 +80,77 @@ export default function EventDetail({ event, fleet, onClose }: { event: FleetEve
   };
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal stack" onClick={(e) => e.stopPropagation()}>
-        <div className="row">
-          <h2 className="grow" style={{ margin: 0 }}>
-            {EVENT_LABEL[event.type]}
-          </h2>
-          <button className="btn" onClick={onClose}>
-            ✕
+    <Sheet
+      title={EVENT_LABEL[event.type]}
+      icon={<EventIcon e={event} />}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn btn-danger" onClick={() => void remove()} disabled={busy} aria-label="Удалить запись">
+            <Trash2 size={18} />
           </button>
-        </div>
-        <div className="muted small">
-          <b>{fleet.plateOf(event.vehicle_id)}</b> · {fleet.nameOf(event.driver_id)} · {fmtDateTime(event.occurred_at)}
-          {event.fuel && ` · ${FUEL_LABEL[event.fuel]}`}
+          <button className="btn btn-primary grow" onClick={() => void save()} disabled={busy}>
+            <Save size={18} /> Сохранить исправления
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <div className="row wrap" style={{ gap: 10 }}>
+          <Plate plate={fleet.plateOf(event.vehicle_id)} size="sm" />
+          <span className="muted small">
+            {fleet.nameOf(event.driver_id)} · {fmtDateTime(event.occurred_at)}
+          </span>
+          {event.fuel && <FuelTag fuel={event.fuel} />}
         </div>
 
-        {event.odometer_photo ? <SignedPhoto path={event.odometer_photo} alt="Одометр" /> : <div className="note warn small">Нет фото одометра</div>}
+        {event.odometer_photo ? (
+          <SignedPhoto path={event.odometer_photo} alt="Фото одометра" />
+        ) : (
+          <div className="note warn">
+            <CircleAlert size={18} /> Нет фото одометра
+          </div>
+        )}
 
         <label className="field">
-          <span>Пробег, км</span>
-          <input value={odo} onChange={(e) => setOdo(e.target.value)} inputMode="numeric" />
+          <span className="field-label">Пробег</span>
+          <span className="input-wrap">
+            <input value={odo} onChange={(e) => setOdo(e.target.value)} inputMode="numeric" />
+            <span className="input-suffix">км</span>
+          </span>
         </label>
         {event.type === 'refuel' && (
           <>
-            <div className="row">
-              <label className="field grow">
-                <span>Литров</span>
-                <input value={liters} onChange={(e) => setLiters(e.target.value)} inputMode="decimal" />
+            <div className="grid-2">
+              <label className="field">
+                <span className="field-label">Литров</span>
+                <span className="input-wrap">
+                  <input value={liters} onChange={(e) => setLiters(e.target.value)} inputMode="decimal" />
+                  <span className="input-suffix">л</span>
+                </span>
               </label>
-              <label className="field grow">
-                <span>Сумма, ₸</span>
-                <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
+              <label className="field">
+                <span className="field-label">Сумма</span>
+                <span className="input-wrap">
+                  <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
+                  <span className="input-suffix">₸</span>
+                </span>
               </label>
             </div>
-            <label className="check">
-              <input type="checkbox" checked={fullTank} onChange={(e) => setFullTank(e.target.checked)} />
-              До полного бака
-            </label>
-            {event.receipt_photo && <SignedPhoto path={event.receipt_photo} alt="Чек" />}
+            <Switch checked={fullTank} onChange={setFullTank} label="До полного бака" />
+            {event.receipt_photo && <SignedPhoto path={event.receipt_photo} alt="Фото чека" />}
           </>
         )}
         <label className="field">
-          <span>Комментарий</span>
+          <span className="field-label">Комментарий</span>
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} />
         </label>
-        {error && <div className="note bad">{error}</div>}
-        <div className="row">
-          <button className="btn primary grow" onClick={() => void save()} disabled={busy}>
-            Сохранить исправления
-          </button>
-          <button className="btn danger" onClick={() => void remove()} disabled={busy}>
-            Удалить
-          </button>
-        </div>
+        {error && (
+          <div className="note bad">
+            <CircleAlert size={18} /> {error}
+          </div>
+        )}
       </div>
-    </div>
+    </Sheet>
   );
 }
