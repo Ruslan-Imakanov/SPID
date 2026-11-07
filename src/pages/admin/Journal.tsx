@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Camera, ChevronRight, Receipt, ScrollText } from 'lucide-react';
+import { Camera, ChevronRight, ReceiptText, ScrollText } from 'lucide-react';
 import { dayKey, monthKey } from '../../lib/calc';
 import { capitalize, currentMonth, fmtNum, fmtTenge, fmtTime } from '../../lib/format';
 import { EVENT_LABEL, FUEL_LABEL, type EventType, type FleetEvent } from '../../lib/types';
@@ -128,7 +128,7 @@ export default function Journal({
                     </div>
                     <span className="row faint" style={{ gap: 4 }}>
                       {e.odometer_photo && <Camera size={16} aria-label="есть фото одометра" />}
-                      {e.receipt_photo && <Receipt size={16} aria-label="есть фото чека" />}
+                      {e.receipt_photo && <ReceiptText size={16} aria-label="есть фото чека" />}
                     </span>
                     <ChevronRight size={18} className="faint" />
                   </div>

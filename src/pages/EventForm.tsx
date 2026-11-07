@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowLeft, Camera, Check, CircleAlert, MessageSquarePlus, Receipt, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Camera, Check, CircleAlert, MessageSquarePlus, ReceiptText, RefreshCw, TriangleAlert } from 'lucide-react';
 import { BIG_JUMP_KM } from '../lib/calc';
 import { fmtDateTime, fmtNum, uuid } from '../lib/format';
 import { compressImage } from '../lib/image';
@@ -268,7 +268,7 @@ export default function EventForm({ type, vehicle, profile, last, shift, onDone,
             </div>
             {price !== null && (
               <div className={`price-line${priceOdd ? ' t-warn' : ''}`}>
-                {priceOdd ? <TriangleAlert size={16} /> : <Receipt size={16} />}
+                {priceOdd ? <TriangleAlert size={16} /> : <ReceiptText size={16} />}
                 <span>
                   Цена: <b>{fmtNum(price, 1)} ₸</b> за литр{priceOdd ? ' — проверьте литры и сумму' : ''}
                 </span>
@@ -282,7 +282,7 @@ export default function EventForm({ type, vehicle, profile, last, shift, onDone,
               hint={fullTank ? 'По полным бакам считается расход' : 'Неполная заправка учтётся при следующей полной'}
             />
 
-            <PhotoTile title="Фото чека" hint="По желанию" file={receipt} onChange={setReceipt} small icon={Receipt} />
+            <PhotoTile title="Фото чека" hint="По желанию" file={receipt} onChange={setReceipt} small icon={ReceiptText} />
           </section>
         )}
 
