@@ -18,6 +18,8 @@ import { supabase } from '../lib/supabase';
 import {
   cachedPolicies,
   cachePolicies,
+  cachedRegions,
+  cacheRegions,
   cachedVehicles,
   cacheRecent,
   cacheVehicles,
@@ -32,12 +34,13 @@ import {
 } from '../lib/offline';
 import { dayKey, dayKm } from '../lib/calc';
 import { capitalize, fmtDateTime, fmtNum, fmtTime } from '../lib/format';
-import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, INSURANCE_LABEL, type EventType, type FleetEvent, type InsurancePolicy, type Profile, type Vehicle } from '../lib/types';
+import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, INSURANCE_LABEL, type EventType, type FleetEvent, type InsurancePolicy, type Profile, type Region, type Vehicle } from '../lib/types';
 import { driverPolicies, fmtDate, summaryStatus } from '../lib/insurance';
 import { Avatar, FUEL_ICON, FuelTag, Logo, Odometer, Plate, Sheet, durationParts, useNow } from '../components/ui';
 import GaugeArt from '../components/GaugeArt';
 import EventForm from './EventForm';
 import ProfileSheet from '../components/ProfileSheet';
+import PushToggle from '../components/PushToggle';
 
 const VEHICLE_KEY = 'spid-vehicle';
 
@@ -103,6 +106,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
   const [events, setEvents] = useState<FleetEvent[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
   const [vehicleId, setVehicleId] = useState<string | null>(() => {
     try {
       return localStorage.getItem(VEHICLE_KEY);
@@ -122,11 +126,16 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
   }, []);
 
   const loadServer = useCallback(async () => {
-    const [vRes, eRes, pRes] = await Promise.all([
+    const [vRes, eRes, pRes, rRes] = await Promise.all([
       supabase.from('vehicles').select('*').eq('active', true).order('plate'),
       supabase.from('events').select('*').order('occurred_at', { ascending: false }).limit(500),
-      supabase.from('insurance_policies').select('*')
+      supabase.from('insurance_policies').select('*'),
+      supabase.from('regions').select('*').eq('active', true).order('sort').order('name')
     ]);
+    if (rRes.data) {
+      setRegions(rRes.data as Region[]);
+      await cacheRegions(rRes.data as Region[]);
+    }
     if (pRes.data) {
       setPolicies(pRes.data as InsurancePolicy[]);
       await cachePolicies(pRes.data as InsurancePolicy[]);
@@ -143,6 +152,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
     void (async () => {
       setVehicles(await cachedVehicles());
       setPolicies(await cachedPolicies());
+      setRegions(await cachedRegions());
       await refreshLocal();
       await loadServer();
     })();
@@ -204,6 +214,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
         profile={profile}
         last={last}
         shift={shift}
+        regions={regions}
         onCancel={() => setForm(null)}
         onDone={() => {
           setToast(`${EVENT_LABEL[form]} — сохранено${navigator.onLine ? '' : '. Отправится, когда появится сеть'}`);
@@ -250,6 +261,8 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
             </div>
           </div>
         )}
+
+        <PushToggle userId={profile.id} compact />
 
         {(ins.tone === 'bad' || ins.tone === 'warn') && ins.policy && (
           <div className={`note ${ins.tone}`} role="alert">
@@ -337,6 +350,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
               </div>
               <div className="hero-meta">
                 Выезд в {fmtTime(shift.occurred_at)} · {fmtNum(shift.odometer)} км
+                {shift.region_id && regions.find((r) => r.id === shift.region_id) && ` · ${regions.find((r) => r.id === shift.region_id)!.name}`}
               </div>
               <button className="btn btn-xl btn-block" style={{ background: '#fff', color: '#0b1322', borderColor: '#fff' }} onClick={() => setForm('shift_end')}>
                 <Square size={20} /> Закончить смену

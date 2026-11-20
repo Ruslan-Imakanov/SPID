@@ -11,6 +11,7 @@ interface FleetLike {
   profiles: Profile[];
   events: FleetEvent[];
   policies: InsurancePolicy[];
+  regionName?: (id: string | null | undefined) => string;
   nameOf: (id: string | null) => string;
   plateOf: (id: string) => string;
 }
@@ -82,11 +83,11 @@ export async function exportMonthExcel(report: MonthReport, fleet: FleetLike, is
     ]);
   }
 
-  const shiftSheet: Cell[][] = [[H('Начало'), H('Конец'), H('Машина'), H('Водитель'), H('Выезд, км'), H('Возврат, км'), H('Пробег, км')]];
+  const shiftSheet: Cell[][] = [[H('Начало'), H('Конец'), H('Машина'), H('Водитель'), H('Выезд, км'), H('Возврат, км'), H('Пробег, км'), H('Регион')]];
   for (const v of fleet.vehicles) {
     for (const s of shiftSegments(fleet.events.filter((e) => e.vehicle_id === v.id))) {
       if (monthKey(s.endAt) !== month) continue;
-      shiftSheet.push([D(s.startAt), D(s.endAt), S(v.plate), S(fleet.nameOf(s.driverId)), N(s.startOdo), N(s.endOdo), N(s.endOdo - s.startOdo)]);
+      shiftSheet.push([D(s.startAt), D(s.endAt), S(v.plate), S(fleet.nameOf(s.driverId)), N(s.startOdo), N(s.endOdo), N(s.endOdo - s.startOdo), S(s.regionId && fleet.regionName ? fleet.regionName(s.regionId) : '')]);
     }
   }
 
@@ -118,7 +119,7 @@ export async function exportMonthExcel(report: MonthReport, fleet: FleetLike, is
       w([10, 18, 10, 11, 9, 10, 12, 10, 12, 12, 11, 13, 14]),
       w([24, 7, 11, 9, 9, 11, 18, 20]),
       w([16, 10, 24, 11, 9, 9, 12, 10, 30]),
-      w([16, 16, 10, 24, 11, 11, 11]),
+      w([16, 16, 10, 24, 11, 11, 11, 22]),
       w([16, 10, 24, 80]),
       w([24, 10, 9, 22, 16, 12, 12, 14, 22, 14])
     ],

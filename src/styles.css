@@ -2368,3 +2368,26 @@ details.table-view summary {
     transform: rotate(360deg);
   }
 }
+
+/* Регион рейса */
+.region-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.region-btn {
+  min-height: 52px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: 650 15px/1.2 var(--font-ui);
+  cursor: pointer;
+  text-align: left;
+}
+.region-btn.active {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}

@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowLeft, Camera, Check, CircleAlert, MessageSquarePlus, ReceiptText, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Camera, Check, CircleAlert, MapPin, MessageSquarePlus, ReceiptText, RefreshCw, TriangleAlert } from 'lucide-react';
 import { BIG_JUMP_KM } from '../lib/calc';
 import { fmtDateTime, fmtNum, uuid } from '../lib/format';
 import { compressImage } from '../lib/image';
 import { enqueue } from '../lib/offline';
-import { EVENT_LABEL, FUEL_LABEL, type EventType, type FleetEvent, type Fuel, type Profile, type Vehicle } from '../lib/types';
+import { EVENT_LABEL, FUEL_LABEL, type EventType, type FleetEvent, type Fuel, type Profile, type Region, type Vehicle } from '../lib/types';
 import { FUEL_ICON, FuelTag, Odometer, Plate, Switch, useObjectUrl } from '../components/ui';
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
   last: FleetEvent | null;
   /** Открытая смена водителя (для конца смены). */
   shift: FleetEvent | null;
+  regions: Region[];
   onDone: () => void;
   onCancel: () => void;
 }
@@ -74,7 +75,17 @@ function parseNum(s: string): number {
   return Number(s.replace(/\s/g, '').replace(',', '.'));
 }
 
-export default function EventForm({ type, vehicle, profile, last, shift, onDone, onCancel }: Props) {
+const REGION_KEY = 'gsm-last-region';
+
+export default function EventForm({ type, vehicle, profile, last, shift, regions, onDone, onCancel }: Props) {
+  const [regionId, setRegionId] = useState<string | null>(() => {
+    try {
+      const r = localStorage.getItem(REGION_KEY);
+      return r && regions.some((x) => x.id === r) ? r : null;
+    } catch {
+      return null;
+    }
+  });
   const [odo, setOdo] = useState('');
   const [odoPhoto, setOdoPhoto] = useState<Blob | null>(null);
   const [fuel, setFuel] = useState<Fuel>(vehicle.fuels[0]);
@@ -104,6 +115,7 @@ export default function EventForm({ type, vehicle, profile, last, shift, onDone,
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (type === 'shift_start' && regions.length > 0 && !regionId) return setError('Выберите, в какой регион едете');
     if (!odoValid) return setError('Введите пробег — цифры с одометра');
     if (needsConfirm && !confirmOdd) return setError('Проверьте пробег и подтвердите, что он верный');
     if (!odoPhoto) return setError('Сфотографируйте одометр');
@@ -118,6 +130,7 @@ export default function EventForm({ type, vehicle, profile, last, shift, onDone,
       if (needsConfirm) notes.push(lessThanLast ? '[водитель подтвердил: пробег меньше прошлого]' : '[водитель подтвердил: большой скачок пробега]');
       const ev: FleetEvent = {
         id: uuid(),
+        region_id: type === 'shift_start' ? regionId : type === 'shift_end' ? shift?.region_id ?? null : null,
         vehicle_id: vehicle.id,
         driver_id: profile.id,
         type,
@@ -131,6 +144,13 @@ export default function EventForm({ type, vehicle, profile, last, shift, onDone,
         receipt_photo: null,
         comment: notes.filter(Boolean).join(' ')
       };
+      if (type === 'shift_start' && regionId) {
+        try {
+          localStorage.setItem(REGION_KEY, regionId);
+        } catch {
+          /* ignore */
+        }
+      }
       await enqueue(ev, odoBlob, receiptBlob);
       onDone();
     } catch (err) {
@@ -153,6 +173,27 @@ export default function EventForm({ type, vehicle, profile, last, shift, onDone,
       </header>
 
       <form className="page narrow stack" style={{ gap: 14 }} onSubmit={submit} noValidate>
+        {type === 'shift_start' && regions.length > 0 && (
+          <section className="card pad-lg">
+            <div className="step">
+              <span className={`step-num${regionId ? ' done' : ''}`}>{regionId ? <Check size={15} /> : <MapPin size={14} />}</span>
+              <h2 className="h3 grow">Куда едете</h2>
+            </div>
+            <div className="region-grid" role="radiogroup" aria-label="Регион">
+              {regions.map((r) => (
+                <button type="button" key={r.id} role="radio" aria-checked={regionId === r.id} className={`region-btn${regionId === r.id ? ' active' : ''}`} onClick={() => setRegionId(r.id)}>
+                  {r.name}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+        {type === 'shift_end' && shift?.region_id && regions.find((r) => r.id === shift.region_id) && (
+          <div className="pill amber" style={{ alignSelf: 'flex-start' }}>
+            <MapPin size={14} /> Рейс: {regions.find((r) => r.id === shift.region_id)!.name}
+          </div>
+        )}
+
         {/* Шаг 1: пробег */}
         <section className="card pad-lg">
           <div className="step">

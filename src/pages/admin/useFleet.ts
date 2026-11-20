@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import type { FleetEvent, InsurancePolicy, Profile, Vehicle } from '../../lib/types';
+import type { FleetEvent, InsurancePolicy, Profile, Region, Vehicle } from '../../lib/types';
 
 export interface Fleet {
   vehicles: Vehicle[];
   profiles: Profile[];
   events: FleetEvent[];
   policies: InsurancePolicy[];
+  regions: Region[];
+  regionName: (id: string | null | undefined) => string;
   loading: boolean;
   error: string | null;
   reload: () => Promise<void>;
@@ -35,6 +37,7 @@ export function useFleet(): Fleet {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [events, setEvents] = useState<FleetEvent[]>([]);
   const [policies, setPolicies] = useState<InsurancePolicy[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,12 +45,14 @@ export function useFleet(): Fleet {
     setLoading(true);
     setError(null);
     try {
-      const [v, p, e, ins] = await Promise.all([
+      const [v, p, e, ins, reg] = await Promise.all([
         supabase.from('vehicles').select('*').order('plate'),
         supabase.from('profiles').select('*').order('full_name'),
         fetchAllEvents(),
-        supabase.from('insurance_policies').select('*').order('ends_on')
+        supabase.from('insurance_policies').select('*').order('ends_on'),
+        supabase.from('regions').select('*').order('sort').order('name')
       ]);
+      setRegions((reg.data ?? []) as Region[]);
       if (v.error) throw v.error;
       if (p.error) throw p.error;
       setVehicles(v.data as Vehicle[]);
@@ -72,5 +77,7 @@ export function useFleet(): Fleet {
   );
   const plateOf = useCallback((id: string) => vehicles.find((v) => v.id === id)?.plate ?? '—', [vehicles]);
 
-  return { vehicles, profiles, events, policies, loading, error, reload, nameOf, plateOf };
+  const regionName = useCallback((id: string | null | undefined) => (id ? regions.find((r) => r.id === id)?.name ?? '—' : '—'), [regions]);
+
+  return { vehicles, profiles, events, policies, regions, regionName, loading, error, reload, nameOf, plateOf };
 }

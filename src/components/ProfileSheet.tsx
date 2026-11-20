@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { INSURANCE_LABEL, ROLE_LABEL, type InsurancePolicy, type Profile } from '../lib/types';
 import { currentByKind, fmtDate, policyStatus } from '../lib/insurance';
 import InsurancePill from './InsurancePill';
+import PushToggle from './PushToggle';
 import { Avatar, Sheet } from './ui';
 
 export function fmtPhone(d: string): string {
@@ -47,6 +48,7 @@ export default function ProfileSheet({
           <span className="pill amber">{ROLE_LABEL[profile.role]}</span>
           <span className="muted small">{fmtPhone(profile.phone)}</span>
         </div>
+        <PushToggle userId={profile.id} />
         {policies && (
           <div className="stack tight" style={{ gap: 8 }}>
             <div className="field-label">Моя страховка</div>

@@ -169,6 +169,7 @@ export function currentBaseline(intervals: FuelInterval[], now = Date.now()): nu
 // ───────────────────────── Смены ─────────────────────────
 
 export interface ShiftSegment {
+  regionId?: string | null;
   driverId: string;
   vehicleId: string;
   startOdo: number;
@@ -188,6 +189,7 @@ export function shiftSegments(vehicleEvents: FleetEvent[]): ShiftSegment[] {
       const s = open.get(e.driver_id);
       if (s && e.odometer >= s.odometer) {
         out.push({
+          regionId: s.region_id ?? e.region_id ?? null,
           driverId: e.driver_id,
           vehicleId: e.vehicle_id,
           startOdo: s.odometer,
@@ -653,7 +655,7 @@ export interface FuelNow {
 
 export interface VehicleStatus {
   vehicle: Vehicle;
-  shift: { driverId: string; since: string; startOdo: number; stale: boolean } | null;
+  shift: { driverId: string; since: string; startOdo: number; stale: boolean; regionId: string | null } | null;
   last: FleetEvent | null;
   lastRefuel: FleetEvent | null;
   todayKm: number;
@@ -687,6 +689,7 @@ export function vehicleStatus(v: Vehicle, events: FleetEvent[], now = Date.now()
           driverId: shiftStart.driver_id,
           since: shiftStart.occurred_at,
           startOdo: shiftStart.odometer,
+          regionId: shiftStart.region_id ?? null,
           stale: now - Date.parse(shiftStart.occurred_at) > STALE_SHIFT_HOURS * 3_600_000
         }
       : null,
@@ -695,4 +698,54 @@ export function vehicleStatus(v: Vehicle, events: FleetEvent[], now = Date.now()
     todayKm: dayKm(ve, dayKey(now)),
     fuels
   };
+}
+
+// ───────────────────────── Рейсы (смены с регионом) ─────────────────────────
+
+export interface Trip {
+  key: string;
+  vehicleId: string;
+  driverId: string;
+  regionId: string | null;
+  startAt: string;
+  endAt: string | null;
+  startOdo: number;
+  endOdo: number | null;
+  km: number | null;
+  /** Незакрытый рейс: водитель ещё в пути. */
+  open: boolean;
+}
+
+/** Все рейсы: закрытые (начало + конец) и незакрытые. */
+export function buildTrips(vehicles: Vehicle[], events: FleetEvent[]): Trip[] {
+  const out: Trip[] = [];
+  for (const v of vehicles) {
+    const open = new Map<string, FleetEvent>();
+    for (const e of events.filter((x) => x.vehicle_id === v.id).sort(byTime)) {
+      if (e.type === 'shift_start') {
+        open.set(e.driver_id, e);
+      } else if (e.type === 'shift_end') {
+        const s = open.get(e.driver_id);
+        if (s && e.odometer >= s.odometer) {
+          out.push({
+            key: s.id,
+            vehicleId: v.id,
+            driverId: e.driver_id,
+            regionId: s.region_id ?? e.region_id ?? null,
+            startAt: s.occurred_at,
+            endAt: e.occurred_at,
+            startOdo: s.odometer,
+            endOdo: e.odometer,
+            km: e.odometer - s.odometer,
+            open: false
+          });
+        }
+        open.delete(e.driver_id);
+      }
+    }
+    for (const s of open.values()) {
+      out.push({ key: s.id, vehicleId: v.id, driverId: s.driver_id, regionId: s.region_id ?? null, startAt: s.occurred_at, endAt: null, startOdo: s.odometer, endOdo: null, km: null, open: true });
+    }
+  }
+  return out.sort((a, b) => Date.parse(b.startAt) - Date.parse(a.startAt));
 }

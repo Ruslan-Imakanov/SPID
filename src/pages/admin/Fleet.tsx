@@ -65,7 +65,7 @@ export function Deviation({ value, compact }: { value: number | null; compact?: 
   );
 }
 
-function FleetCard({ s, now, nameOf, onOpen, ins }: { s: VehicleStatus; now: number; nameOf: (id: string | null) => string; onOpen: () => void; ins: InsStatus | null }) {
+function FleetCard({ s, now, nameOf, onOpen, ins, regionName }: { s: VehicleStatus; now: number; nameOf: (id: string | null) => string; onOpen: () => void; ins: InsStatus | null; regionName?: (id: string | null | undefined) => string }) {
   const v = s.vehicle;
   const f = mainFuel(s);
   return (
@@ -96,7 +96,10 @@ function FleetCard({ s, now, nameOf, onOpen, ins }: { s: VehicleStatus; now: num
           <>
             <Avatar name={nameOf(s.shift.driverId)} size="sm" />
             <span className="stack tight" style={{ gap: 0, minWidth: 0 }}>
-              <span style={{ fontWeight: 650 }}>{nameOf(s.shift.driverId)}</span>
+              <span style={{ fontWeight: 650 }}>
+                {nameOf(s.shift.driverId)}
+                {regionName && s.shift.regionId && <span className="pill amber" style={{ marginLeft: 8 }}>{regionName(s.shift.regionId)}</span>}
+              </span>
               <span className="small faint">
                 на смене {sinceLabel(s.shift.since, now)} · выезд {fmtNum(s.shift.startOdo)} км
               </span>
@@ -391,7 +394,7 @@ export default function Fleet({
         ) : (
           <div className="grid-cards">
             {sorted.map((s) => (
-              <FleetCard key={s.vehicle.id} s={s} now={now} nameOf={fleet.nameOf} onOpen={() => setOpenId(s.vehicle.id)} ins={insOf(s.vehicle)} />
+              <FleetCard key={s.vehicle.id} s={s} now={now} nameOf={fleet.nameOf} onOpen={() => setOpenId(s.vehicle.id)} ins={insOf(s.vehicle)} regionName={fleet.regionName} />
             ))}
           </div>
         )}

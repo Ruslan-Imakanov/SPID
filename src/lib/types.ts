@@ -22,8 +22,16 @@ export interface Vehicle {
   notes: string;
 }
 
+export interface Region {
+  id: string;
+  name: string;
+  active: boolean;
+  sort: number;
+}
+
 export interface FleetEvent {
   id: string;
+  region_id?: string | null;
   vehicle_id: string;
   driver_id: string;
   type: EventType;

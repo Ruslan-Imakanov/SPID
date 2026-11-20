@@ -3,7 +3,7 @@
 // поэтому повторная отправка не создаёт дублей.
 
 import { supabase } from './supabase';
-import type { FleetEvent, InsurancePolicy, Vehicle } from './types';
+import type { FleetEvent, InsurancePolicy, Region, Vehicle } from './types';
 import { byTime } from './calc';
 
 export interface QueueItem {
@@ -63,6 +63,12 @@ export async function cacheVehicles(v: Vehicle[]) {
 }
 export async function cachedVehicles(): Promise<Vehicle[]> {
   return (await kvGet<Vehicle[]>('vehicles')) ?? [];
+}
+export async function cacheRegions(r: Region[]) {
+  await kvSet('regions', r);
+}
+export async function cachedRegions(): Promise<Region[]> {
+  return (await kvGet<Region[]>('regions')) ?? [];
 }
 export async function cachePolicies(p: InsurancePolicy[]) {
   await kvSet('policies', p);

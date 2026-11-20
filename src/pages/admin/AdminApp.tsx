@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   LogOut,
   Menu,
+  MapPin,
   RefreshCw,
   ScrollText,
   ShieldCheck,
@@ -18,6 +19,7 @@ import { findIssues } from '../../lib/calc';
 import { ROLE_LABEL, type Profile } from '../../lib/types';
 import { Avatar, Logo, Sheet } from '../../components/ui';
 import ProfileSheet from '../../components/ProfileSheet';
+import PushToggle from '../../components/PushToggle';
 import DriverApp from '../DriverApp';
 import { useFleet } from './useFleet';
 import Fleet from './Fleet';
@@ -27,12 +29,14 @@ import Journal from './Journal';
 import Vehicles from './Vehicles';
 import People from './People';
 import Insurance, { insuranceRows } from './Insurance';
+import Routes from './Routes';
 
-export type Tab = 'fleet' | 'report' | 'issues' | 'journal' | 'vehicles' | 'people' | 'insurance' | 'input';
+export type Tab = 'fleet' | 'report' | 'issues' | 'journal' | 'vehicles' | 'people' | 'insurance' | 'routes' | 'input';
 
 const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'fleet', label: 'Парк', icon: LayoutGrid },
   { id: 'report', label: 'Отчёт', icon: ChartColumn },
+  { id: 'routes', label: 'Маршруты', icon: MapPin },
   { id: 'issues', label: 'Замечания', icon: TriangleAlert },
   { id: 'journal', label: 'Журнал', icon: ScrollText },
   { id: 'vehicles', label: 'Машины', icon: Truck },
@@ -40,7 +44,7 @@ const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'insurance', label: 'Страховки', icon: ShieldCheck },
   { id: 'input', label: 'Ввод показаний', icon: Gauge }
 ];
-const BOTTOM: Tab[] = ['fleet', 'report', 'issues', 'journal'];
+const BOTTOM: Tab[] = ['fleet', 'routes', 'issues', 'journal'];
 
 export default function AdminApp({ profile, onLogout }: { profile: Profile; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('fleet');
@@ -123,6 +127,11 @@ export default function AdminApp({ profile, onLogout }: { profile: Profile; onLo
           </div>
         )}
 
+        {tab === 'fleet' && (
+          <div className="page" style={{ paddingBottom: 0 }}>
+            <PushToggle userId={profile.id} compact />
+          </div>
+        )}
         {tab === 'fleet' && <Fleet fleet={fleet} onOpenJournal={openJournal} onOpenIssues={() => go('issues')} onOpenInsurance={() => go('insurance')} />}
         {tab === 'report' && <Report fleet={fleet} />}
         {tab === 'issues' && <Issues fleet={fleet} />}
@@ -130,6 +139,7 @@ export default function AdminApp({ profile, onLogout }: { profile: Profile; onLo
         {tab === 'vehicles' && <Vehicles fleet={fleet} />}
         {tab === 'people' && <People fleet={fleet} me={profile} />}
         {tab === 'insurance' && <Insurance fleet={fleet} />}
+        {tab === 'routes' && <Routes fleet={fleet} />}
         {tab === 'input' && <DriverApp profile={profile} embedded />}
       </div>
 
@@ -146,7 +156,7 @@ export default function AdminApp({ profile, onLogout }: { profile: Profile; onLo
             </button>
           );
         })}
-        <button className={['vehicles', 'people', 'input'].includes(tab) ? 'active' : ''} onClick={() => setMore(true)}>
+        <button className={['report', 'vehicles', 'people', 'insurance', 'input'].includes(tab) ? 'active' : ''} onClick={() => setMore(true)}>
           <span className="nav-ico">
             <Menu size={21} />
           </span>

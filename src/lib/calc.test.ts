@@ -203,3 +203,21 @@ describe('новые расчёты для экранов', () => {
     expect(f.deviation).toBeCloseTo(24 / 18 - 1);
   });
 });
+
+import { buildTrips } from './calc';
+
+describe('рейсы по регионам', () => {
+  it('закрытые и незакрытые рейсы с регионом', () => {
+    const events = [
+      ev({ type: 'shift_start', odometer: 1000, occurred_at: '2026-10-01T08:00:00Z', driver_id: 'a', region_id: 'r1' }),
+      ev({ type: 'shift_end', odometer: 1310, occurred_at: '2026-10-01T18:00:00Z', driver_id: 'a', region_id: 'r1' }),
+      ev({ type: 'shift_start', odometer: 1310, occurred_at: '2026-10-02T08:00:00Z', driver_id: 'b', region_id: 'r2' })
+    ];
+    const trips = buildTrips([van], events);
+    expect(trips).toHaveLength(2);
+    const open = trips.find((t) => t.open)!;
+    expect(open).toMatchObject({ driverId: 'b', regionId: 'r2', km: null });
+    const done = trips.find((t) => !t.open)!;
+    expect(done).toMatchObject({ driverId: 'a', regionId: 'r1', km: 310 });
+  });
+});
