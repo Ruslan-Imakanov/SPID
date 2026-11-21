@@ -42,8 +42,10 @@ function tx<T>(store: string, mode: IDBTransactionMode, fn: (s: IDBObjectStore) 
         const t = d.transaction(store, mode);
         const req = fn(t.objectStore(store));
         t.oncomplete = () => resolve(req.result);
-        t.onerror = () => reject(t.error);
-        t.onabort = () => reject(t.error);
+        // На iPhone ошибка иногда приходит пустой — даём понятный текст
+        const fail = () => reject(t.error ?? req.error ?? new Error('Память телефона не приняла запись'));
+        t.onerror = fail;
+        t.onabort = fail;
       })
   );
 }
@@ -95,14 +97,49 @@ function notify() {
   listeners.forEach((fn) => fn());
 }
 
+// Фото хранятся как набор байтов, а не как файл: Safari на iPhone не всегда может сохранить
+// файл прямо с камеры в IndexedDB («Error preparing Blob/File data»).
+interface StoredPhoto {
+  buf: ArrayBuffer;
+  type: string;
+}
+interface StoredItem extends Omit<QueueItem, 'odoPhoto' | 'receiptPhoto'> {
+  odoPhoto: StoredPhoto | Blob | null;
+  receiptPhoto: StoredPhoto | Blob | null;
+}
+
+async function packPhoto(b: Blob | null): Promise<StoredPhoto | null> {
+  return b ? { buf: await b.arrayBuffer(), type: b.type || 'image/jpeg' } : null;
+}
+function unpackPhoto(p: StoredPhoto | Blob | null): Blob | null {
+  if (!p) return null;
+  return p instanceof Blob ? p : new Blob([p.buf], { type: p.type });
+}
+async function pack(item: QueueItem): Promise<StoredItem> {
+  return { ...item, odoPhoto: await packPhoto(item.odoPhoto), receiptPhoto: await packPhoto(item.receiptPhoto) };
+}
+function unpack(raw: StoredItem): QueueItem {
+  return { ...raw, odoPhoto: unpackPhoto(raw.odoPhoto), receiptPhoto: unpackPhoto(raw.receiptPhoto) };
+}
+
 export async function queueAll(): Promise<QueueItem[]> {
-  const items = await tx<QueueItem[]>('queue', 'readonly', (s) => s.getAll() as IDBRequest<QueueItem[]>);
-  return items.sort((a, b) => a.createdAt - b.createdAt);
+  const items = await tx<StoredItem[]>('queue', 'readonly', (s) => s.getAll() as IDBRequest<StoredItem[]>);
+  return items.map(unpack).sort((a, b) => a.createdAt - b.createdAt);
 }
 
 export async function enqueue(event: FleetEvent, odoPhoto: Blob | null, receiptPhoto: Blob | null) {
   const item: QueueItem = { id: event.id, event, odoPhoto, receiptPhoto, error: null, createdAt: Date.now() };
-  await tx('queue', 'readwrite', (s) => s.put(item));
+  try {
+    const stored = await pack(item);
+    await tx('queue', 'readwrite', (s) => s.put(stored));
+  } catch (e) {
+    // Память телефона недоступна (например, закрытая вкладка Safari): если есть интернет — отправляем сразу
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      await sendItem(item);
+      return;
+    }
+    throw new Error(`Не удалось сохранить в память телефона. Включите интернет и повторите. (${e instanceof Error ? e.message : 'ошибка'})`);
+  }
   notify();
   void syncQueue();
 }
@@ -112,7 +149,8 @@ async function queueDelete(id: string) {
 }
 
 async function queuePut(item: QueueItem) {
-  await tx('queue', 'readwrite', (s) => s.put(item));
+  const stored = await pack(item);
+  await tx('queue', 'readwrite', (s) => s.put(stored));
 }
 
 async function uploadPhoto(path: string, blob: Blob): Promise<string> {
@@ -127,6 +165,18 @@ async function uploadPhoto(path: string, blob: Blob): Promise<string> {
   return path;
 }
 
+/** Отправка одной записи с фото; возвращает отправленную запись. */
+async function sendItem(item: QueueItem): Promise<FleetEvent> {
+  const ev: FleetEvent = { ...item.event };
+  if (item.odoPhoto) ev.odometer_photo = await uploadPhoto(`${ev.driver_id}/${ev.id}-odo.jpg`, item.odoPhoto);
+  if (item.receiptPhoto) ev.receipt_photo = await uploadPhoto(`${ev.driver_id}/${ev.id}-receipt.jpg`, item.receiptPhoto);
+  const { error } = await supabase.from('events').upsert(ev, { onConflict: 'id', ignoreDuplicates: true });
+  if (error) throw error;
+  const recent = await cachedRecent();
+  await cacheRecent([ev, ...recent.filter((r) => r.id !== ev.id)].slice(0, 500));
+  return ev;
+}
+
 let syncing = false;
 
 export async function syncQueue(): Promise<void> {
@@ -135,15 +185,9 @@ export async function syncQueue(): Promise<void> {
   try {
     const items = await queueAll();
     for (const item of items) {
-      const ev: FleetEvent = { ...item.event };
       try {
-        if (item.odoPhoto) ev.odometer_photo = await uploadPhoto(`${ev.driver_id}/${ev.id}-odo.jpg`, item.odoPhoto);
-        if (item.receiptPhoto) ev.receipt_photo = await uploadPhoto(`${ev.driver_id}/${ev.id}-receipt.jpg`, item.receiptPhoto);
-        const { error } = await supabase.from('events').upsert(ev, { onConflict: 'id', ignoreDuplicates: true });
-        if (error) throw error;
+        await sendItem(item);
         await queueDelete(item.id);
-        const recent = await cachedRecent();
-        await cacheRecent([ev, ...recent.filter((r) => r.id !== ev.id)].slice(0, 500));
       } catch (e) {
         const msg = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e);
         await queuePut({ ...item, error: msg });

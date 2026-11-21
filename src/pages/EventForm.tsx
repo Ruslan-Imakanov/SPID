@@ -154,7 +154,7 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
       await enqueue(ev, odoBlob, receiptBlob);
       onDone();
     } catch (err) {
-      setError(`Не удалось сохранить: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`Не удалось сохранить: ${err instanceof Error && err.message ? err.message : 'ошибка памяти телефона. Попробуйте ещё раз'}`);
     } finally {
       setBusy(false);
     }
