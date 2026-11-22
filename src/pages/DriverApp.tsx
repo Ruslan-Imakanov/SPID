@@ -364,7 +364,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
               <div className="hero-quiet">
                 <div className="h2">Готовы к выезду?</div>
                 <div className="hero-meta" style={{ margin: '6px 0 0', maxWidth: '26ch' }}>
-                  Введите пробег и сфотографируйте одометр — это 10 секунд.
+                  Введите пробег с одометра — это 10 секунд.
                 </div>
               </div>
               <button className="btn btn-primary btn-xl btn-block" disabled={!vehicle} onClick={() => setForm('shift_start')}>

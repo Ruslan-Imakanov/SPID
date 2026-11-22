@@ -58,7 +58,7 @@ export default function Login() {
           <p className="lead">Пробег и топливо всего автопарка — под контролем.</p>
           <div className="auth-points">
             <div>
-              <Gauge size={20} /> Пробег с фото одометра — за 10 секунд
+              <Gauge size={20} /> Пробег смены и заправки — за 10 секунд
             </div>
             <div>
               <TrendingDown size={20} /> Расход каждой машины и перерасход в тенге

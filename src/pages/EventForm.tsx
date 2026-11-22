@@ -87,7 +87,6 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
     }
   });
   const [odo, setOdo] = useState('');
-  const [odoPhoto, setOdoPhoto] = useState<Blob | null>(null);
   const [fuel, setFuel] = useState<Fuel>(vehicle.fuels[0]);
   const [liters, setLiters] = useState('');
   const [amount, setAmount] = useState('');
@@ -118,14 +117,13 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
     if (type === 'shift_start' && regions.length > 0 && !regionId) return setError('Выберите, в какой регион едете');
     if (!odoValid) return setError('Введите пробег — цифры с одометра');
     if (needsConfirm && !confirmOdd) return setError('Проверьте пробег и подтвердите, что он верный');
-    if (!odoPhoto) return setError('Сфотографируйте одометр');
     if (type === 'refuel') {
       if (!(l > 0 && l < 1000)) return setError('Введите, сколько литров залили');
       if (!(a > 0)) return setError('Введите сумму в тенге из чека');
     }
     setBusy(true);
     try {
-      const [odoBlob, receiptBlob] = await Promise.all([compressImage(odoPhoto), receipt ? compressImage(receipt) : Promise.resolve(null)]);
+      const receiptBlob = receipt ? await compressImage(receipt) : null;
       const notes = [comment.trim()];
       if (needsConfirm) notes.push(lessThanLast ? '[водитель подтвердил: пробег меньше прошлого]' : '[водитель подтвердил: большой скачок пробега]');
       const ev: FleetEvent = {
@@ -151,7 +149,7 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
           /* ignore */
         }
       }
-      await enqueue(ev, odoBlob, receiptBlob);
+      await enqueue(ev, null, receiptBlob);
       onDone();
     } catch (err) {
       setError(`Не удалось сохранить: ${err instanceof Error && err.message ? err.message : 'ошибка памяти телефона. Попробуйте ещё раз'}`);
@@ -244,26 +242,11 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
           )}
         </section>
 
-        {/* Шаг 2: фото одометра */}
-        <section className="card pad-lg">
-          <div className="step">
-            <span className={`step-num${odoPhoto ? ' done' : ''}`}>{odoPhoto ? <Check size={15} /> : 2}</span>
-            <h2 className="h3 grow">Фото одометра</h2>
-          </div>
-          <PhotoTile
-            title="Сфотографировать одометр"
-            hint="Чтобы цифры было хорошо видно"
-            file={odoPhoto}
-            onChange={setOdoPhoto}
-            required
-          />
-        </section>
-
-        {/* Шаг 3: заправка */}
+        {/* Шаг 2: заправка */}
         {type === 'refuel' && (
           <section className="card pad-lg stack" style={{ gap: 14 }}>
             <div className="step" style={{ marginBottom: 0 }}>
-              <span className={`step-num${l > 0 && a > 0 ? ' done' : ''}`}>{l > 0 && a > 0 ? <Check size={15} /> : 3}</span>
+              <span className={`step-num${l > 0 && a > 0 ? ' done' : ''}`}>{l > 0 && a > 0 ? <Check size={15} /> : 2}</span>
               <h2 className="h3 grow">Заправка</h2>
               {vehicle.fuels.length === 1 && <FuelTag fuel={fuel} />}
             </div>

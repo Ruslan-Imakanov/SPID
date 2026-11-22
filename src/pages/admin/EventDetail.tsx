@@ -104,13 +104,8 @@ export default function EventDetail({ event, fleet, onClose }: { event: FleetEve
           {event.fuel && <FuelTag fuel={event.fuel} />}
         </div>
 
-        {event.odometer_photo ? (
-          <SignedPhoto path={event.odometer_photo} alt="Фото одометра" />
-        ) : (
-          <div className="note warn">
-            <CircleAlert size={18} /> Нет фото одометра
-          </div>
-        )}
+        {/* Фото одометра больше не требуется; у старых записей оно остаётся */}
+        {event.odometer_photo && <SignedPhoto path={event.odometer_photo} alt="Фото одометра" />}
 
         <label className="field">
           <span className="field-label">Пробег</span>
