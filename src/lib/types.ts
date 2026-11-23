@@ -32,6 +32,7 @@ export interface Region {
 export interface FleetEvent {
   id: string;
   region_id?: string | null;
+  closed_by?: string | null;
   vehicle_id: string;
   driver_id: string;
   type: EventType;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Clock3, Fuel, Route, ScrollText, ShieldAlert, TriangleAlert, Truck } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Clock3, Fuel, Route, ScrollText, ShieldAlert, Square, TriangleAlert, Truck } from 'lucide-react';
 import { byTime, dayKey, findIssues, monthKey, monthKm, sum, vehicleStatus, type FuelNow, type VehicleStatus } from '../../lib/calc';
 import { capitalize, fmtDateTime, fmtNum, fmtTenge, fmtTime } from '../../lib/format';
 import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, INSURANCE_LABEL, type Fuel as FuelT } from '../../lib/types';
@@ -10,6 +10,7 @@ import type { Fleet as FleetData } from './useFleet';
 import { summaryStatus, vehiclePolicies, plural, type InsStatus } from '../../lib/insurance';
 import InsurancePill from '../../components/InsurancePill';
 import { insuranceRows } from './Insurance';
+import CloseShiftSheet, { type OpenShift } from './CloseShiftSheet';
 
 const DAY = 86_400_000;
 
@@ -179,13 +180,15 @@ function VehicleSheet({
   fleet,
   now,
   onClose,
-  onOpenJournal
+  onOpenJournal,
+  onCloseShift
 }: {
   s: VehicleStatus;
   fleet: FleetData;
   now: number;
   onClose: () => void;
   onOpenJournal: () => void;
+  onCloseShift: (s: OpenShift) => void;
 }) {
   const v = s.vehicle;
   const ve = fleet.events.filter((e) => e.vehicle_id === v.id).sort(byTime);
@@ -197,9 +200,19 @@ function VehicleSheet({
       onClose={onClose}
       wide
       footer={
-        <button className="btn btn-ink btn-block" onClick={onOpenJournal}>
-          <ScrollText size={18} /> Все записи машины
-        </button>
+        <>
+          {s.shift && (
+            <button
+              className={`btn${s.shift.stale ? ' btn-primary' : ''}`}
+              onClick={() => onCloseShift({ vehicleId: v.id, driverId: s.shift!.driverId, startAt: s.shift!.since, startOdo: s.shift!.startOdo, regionId: s.shift!.regionId })}
+            >
+              <Square size={18} /> Закрыть смену
+            </button>
+          )}
+          <button className="btn btn-ink grow" onClick={onOpenJournal}>
+            <ScrollText size={18} /> Все записи машины
+          </button>
+        </>
       }
     >
       <div className="stack loose">
@@ -301,6 +314,7 @@ export default function Fleet({
 }) {
   const now = useNow(60_000);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [closing, setClosing] = useState<OpenShift | null>(null);
 
   const statuses = useMemo(
     () => fleet.vehicles.filter((v) => v.active).map((v) => vehicleStatus(v, fleet.events, now)),
@@ -410,8 +424,13 @@ export default function Fleet({
             setOpenId(null);
             onOpenJournal(open.vehicle.id);
           }}
+          onCloseShift={(sh) => {
+            setOpenId(null);
+            setClosing(sh);
+          }}
         />
       )}
+      {closing && <CloseShiftSheet shift={closing} fleet={fleet} onClose={() => setClosing(null)} />}
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { CircleAlert, Clock3, MapPin, Pencil, Plus, Route as RouteIcon, Settings2, Truck } from 'lucide-react';
+import { CircleAlert, Clock3, MapPin, Pencil, Plus, Route as RouteIcon, Settings2, Square, Truck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { buildTrips, monthKey, sum, type Trip } from '../../lib/calc';
 import { currentMonth, fmtDateTime, fmtNum, fmtTime } from '../../lib/format';
 import { Avatar, Empty, Plate, Sheet, Stat, Switch, durationParts, useNow } from '../../components/ui';
 import { MonthNav } from './Report';
+import CloseShiftSheet, { type OpenShift } from './CloseShiftSheet';
 import type { Fleet } from './useFleet';
 
 function RegionsSheet({ fleet, onClose }: { fleet: Fleet; onClose: () => void }) {
@@ -70,6 +71,7 @@ export default function Routes({ fleet }: { fleet: Fleet }) {
   const [month, setMonth] = useState(currentMonth());
   const [region, setRegion] = useState('');
   const [manage, setManage] = useState(false);
+  const [closing, setClosing] = useState<OpenShift | null>(null);
 
   const trips = useMemo(() => buildTrips(fleet.vehicles, fleet.events), [fleet.vehicles, fleet.events]);
   const onRoad = trips.filter((t) => t.open && now - Date.parse(t.startAt) <= 20 * 3_600_000);
@@ -111,6 +113,12 @@ export default function Routes({ fleet }: { fleet: Fleet }) {
           </span>
         </div>
         <div className="small faint">Выезд: {fmtNum(t.startOdo)} км · {fmtDateTime(t.startAt)}</div>
+        <button
+          className={`btn btn-sm${late ? ' btn-primary' : ''}`}
+          onClick={() => setClosing({ vehicleId: t.vehicleId, driverId: t.driverId, startAt: t.startAt, startOdo: t.startOdo, regionId: t.regionId })}
+        >
+          <Square size={16} /> Закрыть смену
+        </button>
       </article>
     );
   };
@@ -226,6 +234,7 @@ export default function Routes({ fleet }: { fleet: Fleet }) {
           </div>
         </section>
       )}
+      {closing && <CloseShiftSheet shift={closing} fleet={fleet} onClose={() => setClosing(null)} />}
       {manage && <RegionsSheet fleet={fleet} onClose={() => setManage(false)} />}
     </div>
   );
