@@ -8,6 +8,7 @@ import {
   Clock3,
   Fuel,
   History,
+  Pencil,
   Play,
   Route,
   ShieldAlert,
@@ -33,12 +34,13 @@ import {
   type QueueItem
 } from '../lib/offline';
 import { dayKey, dayKm } from '../lib/calc';
-import { capitalize, fmtDateTime, fmtNum, fmtTime } from '../lib/format';
+import { capitalize, fmtDateTime, fmtNum, fmtTenge, fmtTime } from '../lib/format';
 import { BODY_LABEL, EVENT_LABEL, FUEL_LABEL, INSURANCE_LABEL, type EventType, type FleetEvent, type InsurancePolicy, type Profile, type Region, type Vehicle } from '../lib/types';
 import { driverPolicies, fmtDate, summaryStatus } from '../lib/insurance';
 import { Avatar, FUEL_ICON, FuelTag, Logo, Odometer, Plate, Sheet, durationParts, useNow } from '../components/ui';
 import GaugeArt from '../components/GaugeArt';
 import EventForm from './EventForm';
+import EditEventSheet, { canDriverEdit } from './EditEventSheet';
 import ProfileSheet from '../components/ProfileSheet';
 import PushToggle from '../components/PushToggle';
 
@@ -118,6 +120,7 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [editing, setEditing] = useState<FleetEvent | null>(null);
 
   const refreshLocal = useCallback(async () => {
     const [ev, q] = await Promise.all([knownEvents(), queueAll()]);
@@ -414,10 +417,16 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
                       {e.type === 'refuel' && e.fuel && (
                         <span className="muted" style={{ fontWeight: 500 }}>
                           {' '}
-                          · {FUEL_LABEL[e.fuel]} {fmtNum(e.liters, 1)} л{e.full_tank ? ', полный бак' : ''}
+                          · {FUEL_LABEL[e.fuel]} {fmtNum(e.liters, 2)} л{e.full_tank ? ', полный бак' : ''}
                         </span>
                       )}
                     </div>
+                    {e.type === 'refuel' && (
+                      <div style={{ fontWeight: 650 }}>
+                        {fmtTenge(e.amount)}
+                        {e.edited_at && <span className="pill" style={{ marginLeft: 8 }}>исправлено</span>}
+                      </div>
+                    )}
                     <div className="small faint">
                       {plateOf(e.vehicle_id)} · {fmtNum(e.odometer)} км · {fmtDateTime(e.occurred_at)}
                     </div>
@@ -426,6 +435,10 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
                     <span className="pill warn" title="Ждёт отправки">
                       <CloudUpload size={14} /> ждёт
                     </span>
+                  ) : canDriverEdit(e, now) ? (
+                    <button className="btn btn-sm" onClick={() => setEditing(e)}>
+                      <Pencil size={15} /> Исправить
+                    </button>
                   ) : (
                     <span className="pill good" title="Отправлено">
                       <Check size={14} />
@@ -467,6 +480,18 @@ export default function DriverApp({ profile, onLogout, embedded }: Props) {
         </Sheet>
       )}
 
+      {editing && (
+        <EditEventSheet
+          event={editing}
+          vehicle={vehicles.find((v) => v.id === editing.vehicle_id)}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            setToast('Запись исправлена');
+            void loadServer();
+          }}
+        />
+      )}
       {menu && <ProfileSheet profile={profile} onClose={() => setMenu(false)} onLogout={onLogout} policies={myPolicies} />}
     </div>
   );

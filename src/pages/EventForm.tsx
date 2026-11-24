@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ArrowLeft, Camera, Check, CircleAlert, MapPin, MessageSquarePlus, ReceiptText, RefreshCw, TriangleAlert } from 'lucide-react';
 import { BIG_JUMP_KM } from '../lib/calc';
+import { parseLiters, parseMoney, priceLooksWrong } from '../lib/numbers';
 import { fmtDateTime, fmtNum, uuid } from '../lib/format';
 import { compressImage } from '../lib/image';
 import { enqueue } from '../lib/offline';
@@ -71,10 +72,6 @@ function PhotoTile({
   );
 }
 
-function parseNum(s: string): number {
-  return Number(s.replace(/\s/g, '').replace(',', '.'));
-}
-
 const REGION_KEY = 'gsm-last-region';
 
 export default function EventForm({ type, vehicle, profile, last, shift, regions, onDone, onCancel }: Props) {
@@ -106,10 +103,11 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
   const diff = odoValid && last ? odoNum - last.odometer : null;
   const minDigits = Math.max(6, String(last?.odometer ?? '').length);
 
-  const l = parseNum(liters);
-  const a = parseNum(amount);
+  const l = parseLiters(liters);
+  const a = parseMoney(amount);
   const price = l > 0 && a > 0 ? a / l : null;
-  const priceOdd = price !== null && (price < 60 || price > 700);
+  const priceOdd = type === 'refuel' && priceLooksWrong(fuel, l, a);
+  const [confirmPrice, setConfirmPrice] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -120,6 +118,7 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
     if (type === 'refuel') {
       if (!(l > 0 && l < 1000)) return setError('Введите, сколько литров залили');
       if (!(a > 0)) return setError('Введите сумму в тенге из чека');
+      if (priceOdd && !confirmPrice) return setError('Цена за литр выглядит неверно. Проверьте литры и сумму или подтвердите, что всё верно');
     }
     setBusy(true);
     try {
@@ -278,14 +277,14 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
               <label className="field">
                 <span className="field-label">Залито</span>
                 <span className="input-wrap">
-                  <input value={liters} onChange={(e) => setLiters(e.target.value)} inputMode="decimal" placeholder="0,0" />
+                  <input value={liters} onChange={(e) => { setLiters(e.target.value); setConfirmPrice(false); }} inputMode="decimal" placeholder="0,0" />
                   <span className="input-suffix">л</span>
                 </span>
               </label>
               <label className="field">
                 <span className="field-label">Сумма по чеку</span>
                 <span className="input-wrap">
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0" />
+                  <input value={amount} onChange={(e) => { setAmount(e.target.value); setConfirmPrice(false); }} inputMode="decimal" placeholder="0" />
                   <span className="input-suffix">₸</span>
                 </span>
               </label>
@@ -294,8 +293,20 @@ export default function EventForm({ type, vehicle, profile, last, shift, regions
               <div className={`price-line${priceOdd ? ' t-warn' : ''}`}>
                 {priceOdd ? <TriangleAlert size={16} /> : <ReceiptText size={16} />}
                 <span>
-                  Цена: <b>{fmtNum(price, 1)} ₸</b> за литр{priceOdd ? ' — проверьте литры и сумму' : ''}
+                  К оплате <b>{fmtNum(a, 2)} ₸</b> за <b>{fmtNum(l, 2)} л</b> · цена <b>{fmtNum(price, 1)} ₸</b> за литр
                 </span>
+              </div>
+            )}
+            {priceOdd && (
+              <div className="note warn stack" style={{ gap: 4 }}>
+                <div className="row top" style={{ gap: 10 }}>
+                  <TriangleAlert size={18} />
+                  <span>
+                    <b>Цена литра {fmtNum(price ?? 0, 1)} ₸ выглядит неверно.</b> Сверьте с чеком: вы вписали <b>{fmtNum(a, 2)} ₸</b> за {fmtNum(l, 2)} л.
+                    Сумма — это ВСЯ сумма по чеку, а не цена литра.
+                  </span>
+                </div>
+                <Switch checked={confirmPrice} onChange={setConfirmPrice} label="Я проверил — сумма и литры верные" />
               </div>
             )}
 

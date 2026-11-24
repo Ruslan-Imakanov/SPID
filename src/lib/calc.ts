@@ -8,6 +8,7 @@
 // (последние несколько месяцев), поэтому она сама подстраивается под зиму и лето.
 
 import type { FleetEvent, Fuel, Vehicle } from './types';
+import { priceLooksWrong } from './numbers';
 
 /** Порог перерасхода относительно нормы машины (10%). */
 export const OVERUSE_THRESHOLD = 0.1;
@@ -474,7 +475,7 @@ function buildGroups(rows: VehicleMonth[]): GroupRow[] {
 
 // ───────────────────────── Замечания ─────────────────────────
 
-export type IssueKind = 'odometer_back' | 'off_shift' | 'big_jump' | 'unclosed_shift' | 'overuse' | 'low_use';
+export type IssueKind = 'odometer_back' | 'off_shift' | 'big_jump' | 'unclosed_shift' | 'overuse' | 'low_use' | 'price_odd';
 
 export interface Issue {
   kind: IssueKind;
@@ -546,6 +547,20 @@ export function findIssues(vehicles: Vehicle[], events: FleetEvent[]): Issue[] {
       } else if (e.type === 'shift_end') {
         openShift.delete(e.driver_id);
         lastEnd = e;
+      }
+    }
+
+    for (const e of ve) {
+      if (e.type === 'refuel' && e.fuel && e.liters && e.amount !== null && priceLooksWrong(e.fuel, e.liters, e.amount)) {
+        issues.push({
+          kind: 'price_odd',
+          severity: 'high',
+          vehicleId: v.id,
+          driverId: e.driver_id,
+          at: e.occurred_at,
+          eventId: e.id,
+          text: `Цена литра ${(e.amount / e.liters).toFixed(1)} ₸ (${fuelName(e.fuel)}): сумма ${Math.round(e.amount).toLocaleString('ru-RU')} ₸ за ${e.liters} л — похоже, сумма или литры введены неверно`
+        });
       }
     }
 

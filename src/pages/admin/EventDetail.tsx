@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CircleAlert, ImageOff, Save, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { fmtDateTime } from '../../lib/format';
+import { parseLiters, parseMoney } from '../../lib/numbers';
 import { EVENT_LABEL, type FleetEvent } from '../../lib/types';
 import { FuelTag, Plate, Sheet, Switch } from '../../components/ui';
 import { EventIcon } from '../DriverApp';
@@ -46,6 +47,17 @@ export default function EventDetail({ event, fleet, onClose }: { event: FleetEve
   const [comment, setComment] = useState(event.comment);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [edits, setEdits] = useState<{ id: string; edited_by: string | null; edited_at: string; old_values: Record<string, unknown>; new_values: Record<string, unknown> }[]>([]);
+  useEffect(() => {
+    if (!event.edited_at) return;
+    void supabase
+      .from('event_edits')
+      .select('*')
+      .eq('event_id', event.id)
+      .order('edited_at')
+      .then(({ data }) => setEdits((data ?? []) as typeof edits));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event.id, event.edited_at]);
 
   const save = async () => {
     setError(null);
@@ -53,8 +65,8 @@ export default function EventDetail({ event, fleet, onClose }: { event: FleetEve
     if (!Number.isInteger(o) || o <= 0) return setError('Неверный пробег');
     const patch: Partial<FleetEvent> = { odometer: o, comment };
     if (event.type === 'refuel') {
-      const l = Number(liters.replace(',', '.'));
-      const a = Number(amount.replace(',', '.'));
+      const l = parseLiters(liters);
+      const a = parseMoney(amount);
       if (!(l > 0)) return setError('Неверные литры');
       if (!(a >= 0)) return setError('Неверная сумма');
       Object.assign(patch, { liters: l, amount: a, full_tank: fullTank });
@@ -135,6 +147,27 @@ export default function EventDetail({ event, fleet, onClose }: { event: FleetEve
             <Switch checked={fullTank} onChange={setFullTank} label="До полного бака" />
             {event.receipt_photo && <SignedPhoto path={event.receipt_photo} alt="Фото чека" />}
           </>
+        )}
+        {edits.length > 0 && (
+          <div className="stack tight" style={{ gap: 6 }}>
+            <div className="field-label">История исправлений</div>
+            {edits.map((x) => {
+              const o = x.old_values as { odometer: number; liters: number | null; amount: number | null };
+              const n = x.new_values as { odometer: number; liters: number | null; amount: number | null };
+              const parts = [
+                o.odometer !== n.odometer && `пробег ${o.odometer} → ${n.odometer} км`,
+                o.liters !== n.liters && `литры ${o.liters} → ${n.liters}`,
+                o.amount !== n.amount && `сумма ${o.amount} → ${n.amount} ₸`
+              ].filter(Boolean);
+              return (
+                <div key={x.id} className="note small">
+                  <span>
+                    {fmtDateTime(x.edited_at)} · {fleet.nameOf(x.edited_by)}: {parts.join('; ') || 'изменён вид топлива или «до полного»'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
         <label className="field">
           <span className="field-label">Комментарий</span>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, Clock3, MoonStar, RotateCcw, ShieldCheck, TrendingDown, TrendingUp, Zap, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Clock3, MoonStar, RotateCcw, ShieldCheck, TrendingDown, TrendingUp, Wallet, Zap, type LucideIcon } from 'lucide-react';
 import { findIssues, type IssueKind } from '../../lib/calc';
 import { fmtDateTime } from '../../lib/format';
 import type { FleetEvent } from '../../lib/types';
@@ -13,7 +13,8 @@ const KIND: Record<IssueKind, { label: string; icon: LucideIcon }> = {
   odometer_back: { label: 'Пробег уменьшился', icon: RotateCcw },
   big_jump: { label: 'Скачок пробега', icon: Zap },
   unclosed_shift: { label: 'Смена не закрыта', icon: Clock3 },
-  low_use: { label: 'Низкий расход', icon: TrendingDown }
+  low_use: { label: 'Низкий расход', icon: TrendingDown },
+  price_odd: { label: 'Странная цена литра', icon: Wallet }
 };
 
 export default function Issues({ fleet }: { fleet: Fleet }) {

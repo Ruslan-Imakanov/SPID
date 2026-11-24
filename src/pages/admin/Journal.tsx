@@ -116,7 +116,7 @@ export default function Journal({
                         <Plate plate={fleet.plateOf(e.vehicle_id)} size="sm" />
                       </div>
                       <div className="small faint" style={{ marginTop: 2 }}>
-                        {fmtTime(e.occurred_at)} · {fleet.nameOf(e.driver_id)} · {fmtNum(e.odometer)} км{e.region_id ? ` · ${fleet.regionName(e.region_id)}` : ''}{e.closed_by ? ' · закрыто руководителем' : ''}
+                        {fmtTime(e.occurred_at)} · {fleet.nameOf(e.driver_id)} · {fmtNum(e.odometer)} км{e.region_id ? ` · ${fleet.regionName(e.region_id)}` : ''}{e.closed_by ? ' · закрыто руководителем' : ''}{e.edited_at ? ' · исправлено' : ''}
                         {e.type === 'refuel' && e.fuel && (
                           <>
                             {' '}
